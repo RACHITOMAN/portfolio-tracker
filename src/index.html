@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portfolio Tracker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="layout-wrapper">
+    <div class="sidebar">
+      <div class="portfolio-summary">
+        <div class="summary-card">
+          <h3>Total Value</h3>
+          <div class="value" id="totalValue">$0.00</div>
+        </div>
+        <div class="summary-card">
+          <h3>Total Cost</h3>
+          <div class="value" id="totalCost">$0.00</div>
+        </div>
+        <div class="summary-card">
+          <h3>Realized Gain/Loss</h3>
+          <div class="value" id="realizedGainLoss">$0.00</div>
+          <div class="change" id="realizedGainPercent">0.00%</div>
+        </div>
+        <div class="summary-card">
+          <h3>Unrealized Gain/Loss</h3>
+          <div class="value" id="totalGainLoss">$0.00</div>
+          <div class="change" id="totalGainLossPercent">0.00%</div>
+        </div>
+        <div class="summary-card">
+          <h3>Holdings</h3>
+          <div class="value" id="stockCount">0 Total</div>
+          <div class="change" id="holdingsBreakdown">RM: 0 | SA: 0 | PRO: 0</div>
+        </div>
+        <div class="summary-card">
+          <h3>XIRR</h3>
+          <div class="value" id="portfolioXIRR">0.00%</div>
+        </div>
+        <div class="summary-card">
+          <h3>Weighted Avg Days Held</h3>
+          <div class="value" id="weightedDaysHeld">0 days</div>
+        </div>
+        
+        <div class="summary-card" id="cashFlowCard1" style="display: none;">
+          <h3>Total Cash Input</h3>
+          <div class="value" id="totalCashInput">$0.00</div>
+        </div>
+        <div class="summary-card" id="cashFlowCard2" style="display: none;">
+          <h3>Portfolio Value</h3>
+          <div class="value" id="cashFlowPortfolioValue">$0.00</div>
+        </div>
+        <div class="summary-card" id="cashFlowCard3" style="display: none;">
+          <h3>Cash-Based Gain/Loss</h3>
+          <div class="value" id="cashFlowGainLoss">$0.00</div>
+          <div class="change" id="cashFlowGainPercent">0.00%</div>
+        </div>
+        <div class="summary-card" id="cashFlowCard4" style="display: none;">
+          <h3>Cash-Based XIRR</h3>
+          <div class="value" id="cashFlowXIRR">0.00%</div>
+        </div>
+        <div class="summary-card" id="cashFlowCard5" style="display: none;">
+          <h3>Weighted Avg Days</h3>
+          <div class="value" id="cashFlowWeightedDays">0 days</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="main-content">
+      <h1>Portfolio Tracker</h1>
+      <p>Monitor your investments with real-time performance tracking</p>
+      
+      <div class="tabs">
+        <button class="tab active" data-tab="total">🌐 Total Portfolio</button>
+        <button class="tab" data-tab="rm">🏦 RM Portfolio</button>
+        <button class="tab" data-tab="sa">💼 SA Portfolio</button>
+        <button class="tab" data-tab="pro">⭐ PRO Portfolio</button>
+        <button class="tab" data-tab="sold">💰 Sold Positions</button>
+        <button class="tab" data-tab="cashflow">💵 Cash Flow</button>
+        <button class="tab" data-tab="ticker">🔍 Ticker Search</button>
+        <button class="tab" data-tab="all">📋 All Transactions</button>
+        <button id="importCsvBtn">📥 Import CSV</button>
+        <button id="refreshPricesBtn">🔄 Refresh Prices</button>
+        <input type="file" id="csvFileInput" accept=".csv,.xlsx" style="display: none;">
+      </div>
+
+      <div class="controls">
+        <select id="type">
+          <option value="buy">Buy</option>
+          <option value="sell">Sell</option>
+          <option value="dividend">Dividend</option>
+          <option value="premium">Option Premium</option>
+        </select>
+        
+        <select id="premiumType" style="display: none;">
+          <option value="covered_call">Covered Call</option>
+          <option value="csp_expired">Cash-Secured Put (Expired)</option>
+          <option value="csp_assigned">Cash-Secured Put (Assigned)</option>
+        </select>
+        
+        <select id="portfolio">
+          <option value="rm">RM</option>
+          <option value="sa">SA</option>
+          <option value="pro">PRO</option>
+        </select>
+        <input type="text" id="symbol" placeholder="Symbol">
+        <input type="number" id="shares" placeholder="Shares/Amount" min="0" step="0.01">
+        <input type="number" id="price" placeholder="Price" min="0" step="0.01">
+        <input type="date" id="date">
+        <button id="addTransactionBtn" type="button">Add Transaction</button>
+        <button id="clearDataBtn" type="button">Clear All</button>
+        <button id="deleteSelected" type="button">Delete Selected</button>
+      </div>
+
+      <div class="tab-content active" id="total">
+        <div class="table-responsive">
+          <table id="totalTable">
+            <thead>
+              <tr>
+                <th data-sort="select" style="width: 40px;"><input type="checkbox" id="selectAll"></th>
+                <th data-sort="symbol">Symbol</th>
+                <th data-sort="shares">Shares</th>
+                <th data-sort="avgCost">Avg Cost</th>
+                <th data-sort="currentPrice">Current Price</th>
+                <th data-sort="totalCost">Total Cost</th>
+                <th data-sort="currentValue">Current Value</th>
+                <th data-sort="percentPortfolio">Portfolio %</th>
+                <th data-sort="gainLoss">Unrealized Gain/Loss</th>
+                <th data-sort="gainLossPercent">Gain/Loss %</th>
+                <th data-sort="xirr">XIRR</th>
+                <th data-sort="weightedDays" class="weighted-days-held">Weighted Avg Days Held</th>
+                <th data-sort="firstDate">First Purchase</th>
+                <th data-sort="lastDate">Last Entry</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tab-content" id="rm">
+        <div class="table-responsive">
+          <table id="rmTable">
+            <thead>
+              <tr>
+                <th data-sort="select" style="width: 40px;"><input type="checkbox" id="selectAllRM"></th>
+                <th data-sort="symbol">Symbol</th>
+                <th data-sort="shares">Shares</th>
+                <th data-sort="avgCost">Avg Cost</th>
+                <th data-sort="currentPrice">Current Price</th>
+                <th data-sort="totalCost">Total Cost</th>
+                <th data-sort="currentValue">Current Value</th>
+                <th data-sort="percentPortfolio">Portfolio %</th>
+                <th data-sort="gainLoss">Unrealized Gain/Loss</th>
+                <th data-sort="gainLossPercent">Gain/Loss %</th>
+                <th data-sort="xirr">XIRR</th>
+                <th data-sort="weightedDays" class="weighted-days-held">Weighted Avg Days Held</th>
+                <th data-sort="firstDate">First Purchase</th>
+                <th data-sort="lastDate">Last Entry</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tab-content" id="sa">
+        <div class="table-responsive">
+          <table id="saTable">
+            <thead>
+              <tr>
+                <th data-sort="select" style="width: 40px;"><input type="checkbox" id="selectAllSA"></th>
+                <th data-sort="symbol">Symbol</th>
+                <th data-sort="shares">Shares</th>
+                <th data-sort="avgCost">Avg Cost</th>
+                <th data-sort="currentPrice">Current Price</th>
+                <th data-sort="totalCost">Total Cost</th>
+                <th data-sort="currentValue">Current Value</th>
+                <th data-sort="percentPortfolio">Portfolio %</th>
+                <th data-sort="gainLoss">Unrealized Gain/Loss</th>
+                <th data-sort="gainLossPercent">Gain/Loss %</th>
+                <th data-sort="xirr">XIRR</th>
+                <th data-sort="weightedDays" class="weighted-days-held">Weighted Avg Days Held</th>
+                <th data-sort="firstDate">First Purchase</th>
+                <th data-sort="lastDate">Last Entry</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tab-content" id="pro">
+        <div class="table-responsive">
+          <table id="proTable">
+            <thead>
+              <tr>
+                <th data-sort="select" style="width: 40px;"><input type="checkbox" id="selectAllPRO"></th>
+                <th data-sort="symbol">Symbol</th>
+                <th data-sort="shares">Shares</th>
+                <th data-sort="avgCost">Avg Cost</th>
+                <th data-sort="currentPrice">Current Price</th>
+                <th data-sort="totalCost">Total Cost</th>
+                <th data-sort="currentValue">Current Value</th>
+                <th data-sort="percentPortfolio">Portfolio %</th>
+                <th data-sort="gainLoss">Unrealized Gain/Loss</th>
+                <th data-sort="gainLossPercent">Gain/Loss %</th>
+                <th data-sort="xirr">XIRR</th>
+                <th data-sort="weightedDays" class="weighted-days-held">Weighted Avg Days Held</th>
+                <th data-sort="firstDate">First Purchase</th>
+                <th data-sort="lastDate">Last Entry</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tab-content" id="sold">
+        <div class="table-responsive">
+          <table id="soldTable">
+            <thead>
+              <tr>
+                <th data-sort="select" style="width: 40px;"><input type="checkbox" id="selectAllSold"></th>
+                <th data-sort="symbol">Symbol</th>
+                <th data-sort="portfolio">Portfolio</th>
+                <th data-sort="shares">Shares Sold</th>
+                <th data-sort="avgBuyPrice">Avg Buy Price</th>
+                <th data-sort="avgSellPrice">Avg Sell Price</th>
+                <th data-sort="currentPrice">Current Price</th>
+                <th data-sort="realizedGain">Realized Gain</th>
+                <th data-sort="gainPercent">Gain %</th>
+                <th data-sort="daysHeld">Days Held</th>
+                <th data-sort="xirr">XIRR</th>
+                <th data-sort="missedGain">Missed/Avoided Gain</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tab-content" id="all">
+        <div class="table-responsive">
+          <table id="allTable">
+            <thead>
+              <tr>
+                <th data-sort="select"><input type="checkbox" id="selectAllAll"></th>
+                <th data-sort="type">Type</th>
+                <th data-sort="portfolio">Portfolio</th>
+                <th data-sort="symbol">Symbol</th>
+                <th data-sort="shares">Shares</th>
+                <th data-sort="price">Price</th>
+                <th data-sort="date">Date</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tab-content" id="ticker">
+        <div class="ticker-search-controls">
+          <input type="text" id="tickerSearchInput" placeholder="Enter ticker symbol (e.g., AMZN)">
+          <button id="searchTickerBtn">Search</button>
+          <button id="clearTickerBtn">Clear</button>
+        </div>
+        <div class="table-responsive">
+          <table id="tickerTable">
+            <thead>
+              <tr>
+                <th data-sort="select"><input type="checkbox" id="selectAllTicker"></th>
+                <th data-sort="type">Type</th>
+                <th data-sort="portfolio">Portfolio</th>
+                <th data-sort="symbol">Symbol</th>
+                <th data-sort="shares">Shares</th>
+                <th data-sort="price">Price</th>
+                <th data-sort="date">Date</th>
+                <th data-sort="value">Value</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tab-content" id="cashflow">
+        <div class="controls">
+          <select id="cashFlowType">
+            <option value="deposit">Deposit</option>
+            <option value="withdrawal">Withdrawal</option>
+          </select>
+          <input type="number" id="cashAmount" placeholder="Amount" min="0" step="0.01">
+          <input type="date" id="cashDate">
+          <button id="addCashFlowBtn" type="button">Add Cash Flow</button>
+          <button id="deleteCashFlowSelected" type="button">Delete Selected</button>
+        </div>
+
+        <div class="table-responsive">
+          <table id="cashFlowTable">
+            <thead>
+              <tr>
+                <th data-sort="select" style="width: 50px;"><input type="checkbox" id="selectAllCashFlow"></th>
+                <th data-sort="type" style="width: 120px;">Type</th>
+                <th data-sort="amount" style="width: 150px;">Amount</th>
+                <th data-sort="date" style="width: 150px;">Date</th>
+                <th data-sort="weightedDays" style="width: 180px;">Weighted Avg Days</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script>
+    const SUPABASE_URL = 'https://dssgocxmygwnvoraqrjs.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzc2dvY3hteWd3bnZvcmFxcmpzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njc3NzcsImV4cCI6MjA3NTI0Mzc3N30.OiF9H7pqmHYojVDBhGqeJsFzx9VbjtcwdjK59YsTjCE';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  </script>
+
+  <script src="app.js"></script>
+</body>
+</html>
