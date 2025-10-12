@@ -428,7 +428,52 @@ async function confirmDeleteSelected() {
   await loadDataFromSupabase();
   refreshPricesAndNames();
 }
+// ============ CSV EXPORT ============
 
+function exportTransactionsToCSV() {
+  if (transactions.length === 0) {
+    alert('No transactions to export');
+    return;
+  }
+
+  // Create CSV header
+  const headers = ['Date', 'Symbol', 'Portfolio', 'Type', 'Quantity', 'Price', 'Notes', 'PremiumType'];
+  
+  // Create CSV rows
+  const rows = transactions.map(t => {
+    return [
+      t.date,
+      t.symbol,
+      t.portfolio,
+      t.type,
+      t.quantity,
+      t.price,
+      t.notes || '',
+      t.premium_type || ''
+    ];
+  });
+
+  // Combine headers and rows
+  const csvContent = [headers, ...rows]
+    .map(row => row.map(cell => `"${cell}"`).join(','))
+    .join('\n');
+
+  // Create blob and download
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  
+  const timestamp = new Date().toISOString().split('T')[0];
+  link.setAttribute('href', url);
+  link.setAttribute('download', `portfolio-transactions-${timestamp}.csv`);
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  alert(`Exported ${transactions.length} transactions to CSV`);
+}
 function handleCsvImport(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -1385,6 +1430,7 @@ async function init() {
   document.getElementById('importCsvBtn').addEventListener('click', function() {
     document.getElementById('csvFileInput').click();
   });
+  document.getElementById('exportCsvBtn').addEventListener('click', exportTransactionsToCSV);
   document.getElementById('csvFileInput').addEventListener('change', handleCsvImport);
   document.getElementById('searchTickerBtn').addEventListener('click', searchTicker);
   document.getElementById('clearTickerBtn').addEventListener('click', clearTickerSearch);
