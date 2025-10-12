@@ -849,7 +849,7 @@ function updateTables(symbolData, portfolioData, soldData) {
         
         const currentPrice = livePrices[symbol] || 0;
         
-        const unrealizedGain = currentPrice > 0 ? ((currentPrice - data.avgBuyPrice) * data.sharesSold) - data.realizedGain : 0;
+const unrealizedGain = data.isPremium ? null : (currentPrice > 0 ? ((currentPrice - data.avgBuyPrice) * data.sharesSold) - data.realizedGain : 0);
         
         row.innerHTML = '<td><input type="checkbox" class="select-row"></td>' +
           '<td>' + symbol + (data.isPremium ? ' (Premium)' : '') + '</td>' +
@@ -862,7 +862,7 @@ function updateTables(symbolData, portfolioData, soldData) {
           '<td class="' + (data.gainPercent < 0 ? 'negative' : 'positive') + '">' + data.gainPercent + '%</td>' +
           '<td>' + daysHeld + '</td>' +
           '<td>' + (daysHeld < 90 ? 'N/A' : (xirr * 100).toFixed(2) + '%') + '</td>' +
-          '<td class="' + (unrealizedGain < 0 ? 'positive' : 'negative') + '">$' + unrealizedGain.toFixed(2) + '</td>';
+'<td>' + (unrealizedGain === null ? 'N/A' : '<span class="' + (unrealizedGain < 0 ? 'positive' : 'negative') + '">$' + unrealizedGain.toFixed(2) + '</span>') + '</td>';
         tbody.appendChild(row);
       }
     } else {
