@@ -1,4 +1,16 @@
+# Don't track these files
 node_modules/
+.DS_Store
+*.log
+.env
+temp/
+
+# CRITICAL: Don't upload token file!
+GITHUB KEY.docx
+*.docx
+token.txt
+passwords.txt
+secrets/node_modules/
 .DS_Store
 *.log
 .env
