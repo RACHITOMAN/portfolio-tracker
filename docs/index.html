@@ -7,8 +7,87 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- Welcome Modal (First Time Users) -->
+  <div id="welcomeModal" class="modal">
+    <div class="modal-content welcome-content">
+      <h2>📈 Welcome to Portfolio Tracker!</h2>
+      
+      <div class="tutorial-section">
+        <h3>🚀 Getting Started</h3>
+        <ol>
+          <li><strong>Get Your API Key:</strong> Sign up for free at <a href="https://twelvedata.com/" target="_blank">Twelve Data</a> to get your API key</li>
+          <li><strong>Enter API Key:</strong> Click the Settings (⚙️) button and enter your API key</li>
+          <li><strong>Add Transactions:</strong> Use the form to add your stock purchases, sales, and dividends</li>
+          <li><strong>Create Portfolios:</strong> Organize stocks into custom portfolios (e.g., "Long Term", "Day Trading", "IRA")</li>
+          <li><strong>Track Performance:</strong> View real-time prices, gains/losses, and XIRR calculations</li>
+        </ol>
+      </div>
+
+      <div class="tutorial-section">
+        <h3>💡 Key Features</h3>
+        <ul>
+          <li><strong>Multiple Portfolios:</strong> Create up to 5 custom portfolios with your own names</li>
+          <li><strong>Transaction Types:</strong> Buy, Sell, Dividend, and Options Premium tracking</li>
+          <li><strong>Real-time Pricing:</strong> Automatic price updates from market data</li>
+          <li><strong>CSV Import:</strong> Bulk import transactions from Excel/CSV files</li>
+          <li><strong>Performance Metrics:</strong> XIRR, gain/loss tracking, weighted avg days held</li>
+          <li><strong>Options Trading:</strong> Track covered calls, CSP assigned, and CSP expired</li>
+        </ul>
+      </div>
+
+      <div class="tutorial-section">
+        <h3>📊 Understanding Portfolios</h3>
+        <p><strong>Total Portfolio:</strong> Shows all your holdings across all sub-portfolios</p>
+        <p><strong>Custom Sub-portfolios:</strong> Create separate portfolios to organize your investments by strategy, account type, or any other categorization</p>
+      </div>
+
+      <div class="tutorial-section">
+        <h3>🔑 Important Notes</h3>
+        <ul>
+          <li>API key is required for real-time price updates</li>
+          <li>Your data is stored securely in Supabase cloud database</li>
+          <li>Free Twelve Data plan allows 800 API calls per day (8 per minute)</li>
+          <li>Prices are cached for 4 hours to conserve API usage</li>
+        </ul>
+      </div>
+
+      <button id="closeWelcomeBtn" class="btn-primary">Get Started!</button>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <h2>⚙️ Settings</h2>
+      
+      <div class="settings-section">
+        <h3>🔑 API Key Configuration</h3>
+        <p>Enter your Twelve Data API key. <a href="https://twelvedata.com/" target="_blank">Get one free here</a>.</p>
+        <input type="text" id="apiKeyInput" placeholder="Enter your API key" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px;">
+        <button id="saveApiKeyBtn" class="btn-primary">Save API Key</button>
+        <p id="apiKeyStatus" style="margin-top: 10px; font-weight: 600;"></p>
+      </div>
+
+      <div class="settings-section">
+        <h3>📁 Manage Portfolios</h3>
+        <p>Create up to 5 custom portfolios. "Total Portfolio" always shows all holdings.</p>
+        <div id="portfolioList"></div>
+        <button id="addPortfolioBtn" class="btn-secondary" style="margin-top: 10px;">+ Add Portfolio</button>
+      </div>
+    </div>
+  </div>
+
   <div class="layout-wrapper">
     <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>📊 Summary</h2>
+        <div class="header-buttons">
+          <button id="settingsBtn" class="icon-btn" title="Settings">⚙️</button>
+          <button id="helpBtn" class="icon-btn" title="Help">❓</button>
+        </div>
+      </div>
+
       <div class="portfolio-summary">
         <div class="summary-card">
           <h3>Total Value</h3>
@@ -31,7 +110,7 @@
         <div class="summary-card">
           <h3>Holdings</h3>
           <div class="value" id="stockCount">0 Total</div>
-          <div class="change" id="holdingsBreakdown">RM: 0 | SA: 0 | PRO: 0</div>
+          <div class="change" id="holdingsBreakdown"></div>
         </div>
         <div class="summary-card">
           <h3>XIRR</h3>
@@ -55,261 +134,160 @@
           <div class="value" id="cashFlowGainLoss">$0.00</div>
           <div class="change" id="cashFlowGainPercent">0.00%</div>
         </div>
-        <div class="summary-card" id="cashFlowCard4" style="display: none;">
-          <h3>Cash-Based XIRR</h3>
-          <div class="value" id="cashFlowXIRR">0.00%</div>
-        </div>
-        <div class="summary-card" id="cashFlowCard5" style="display: none;">
-          <h3>Weighted Avg Days</h3>
-          <div class="value" id="cashFlowWeightedDays">0 days</div>
-        </div>
       </div>
     </div>
-    
-    <div class="main-content">
-      <h1>Portfolio Tracker</h1>
-      <p>Monitor your investments with real-time performance tracking</p>
-      
-      <div class="tabs">
-        <button class="tab active" data-tab="total">🌐 Total Portfolio</button>
-        <button class="tab" data-tab="rm">🏦 RM Portfolio</button>
-        <button class="tab" data-tab="sa">💼 SA Portfolio</button>
-        <button class="tab" data-tab="pro">⭐ PRO Portfolio</button>
-        <button class="tab" data-tab="sold">💰 Sold Positions</button>
-        <button class="tab" data-tab="cashflow">💵 Cash Flow</button>
-        <button class="tab" data-tab="ticker">🔍 Ticker Search</button>
-        <button class="tab" data-tab="all">📋 All Transactions</button>
-         <button id="refreshPricesBtn">🔄 Refresh Prices</button>
-        <button id="importCsvBtn">📥 Import CSV</button>     
-        <input type="file" id="csvFileInput" accept=".csv,.xlsx" style="display: none;">
-         <button id="exportCsvBtn" class="btn-secondary">📤 Export CSV</button>
 
-      </div>
-    
-      <div class="controls">
-        <select id="type">
-          <option value="buy">Buy</option>
-          <option value="sell">Sell</option>
-          <option value="dividend">Dividend</option>
-          <option value="premium">Option Premium</option>
-        </select>
-        
-        <select id="premiumType" style="display: none;">
-          <option value="covered_call">Covered Call</option>
-          <option value="csp_expired">Cash-Secured Put (Expired)</option>
-          <option value="csp_assigned">Cash-Secured Put (Assigned)</option>
-        </select>
-        
-        <select id="portfolio">
-          <option value="rm">RM</option>
-          <option value="sa">SA</option>
-          <option value="pro">PRO</option>
-        </select>
-        <input type="text" id="symbol" placeholder="Symbol">
-        <input type="number" id="shares" placeholder="Shares/Amount" min="0" step="0.01">
-        <input type="number" id="price" placeholder="Price" min="0" step="0.01">
-        <input type="date" id="date">
-        <button id="addTransactionBtn" type="button">Add Transaction</button>
-        <button id="clearDataBtn" type="button">Clear All</button>
-        <button id="deleteSelected" type="button">Delete Selected</button>
+    <div class="main-panel">
+      <div class="tabs" id="mainTabs">
+        <button class="tab active" data-tab="all-transactions">All Transactions</button>
+        <button class="tab" data-tab="total-portfolio">Total Portfolio</button>
+        <!-- Custom portfolio tabs will be added here dynamically -->
+        <button class="tab" data-tab="sold-positions">Sold Positions</button>
+        <button class="tab" data-tab="cash-flows">Cash Flows</button>
       </div>
 
-      <div class="tab-content active" id="total">
-        <div class="table-responsive">
-          <table id="totalTable">
-            <thead>
-              <tr>
-                <th data-sort="select" style="width: 40px;"><input type="checkbox" id="selectAll"></th>
-                <th data-sort="symbol">Symbol</th>
-                <th data-sort="shares">Shares</th>
-                <th data-sort="avgCost">Avg Cost</th>
-                <th data-sort="currentPrice">Current Price</th>
-                <th data-sort="totalCost">Total Cost</th>
-                <th data-sort="currentValue">Current Value</th>
-                <th data-sort="percentPortfolio">Portfolio %</th>
-                <th data-sort="gainLoss">Unrealized Gain/Loss</th>
-                <th data-sort="gainLossPercent">Gain/Loss %</th>
-                <th data-sort="xirr">XIRR</th>
-                <th data-sort="weightedDays" class="weighted-days-held">Weighted Avg Days Held</th>
-                <th data-sort="firstDate">First Purchase</th>
-                <th data-sort="lastDate">Last Entry</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="tab-content" id="rm">
-        <div class="table-responsive">
-          <table id="rmTable">
-            <thead>
-              <tr>
-                <th data-sort="select" style="width: 40px;"><input type="checkbox" id="selectAllRM"></th>
-                <th data-sort="symbol">Symbol</th>
-                <th data-sort="shares">Shares</th>
-                <th data-sort="avgCost">Avg Cost</th>
-                <th data-sort="currentPrice">Current Price</th>
-                <th data-sort="totalCost">Total Cost</th>
-                <th data-sort="currentValue">Current Value</th>
-                <th data-sort="percentPortfolio">Portfolio %</th>
-                <th data-sort="gainLoss">Unrealized Gain/Loss</th>
-                <th data-sort="gainLossPercent">Gain/Loss %</th>
-                <th data-sort="xirr">XIRR</th>
-                <th data-sort="weightedDays" class="weighted-days-held">Weighted Avg Days Held</th>
-                <th data-sort="firstDate">First Purchase</th>
-                <th data-sort="lastDate">Last Entry</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="tab-content" id="sa">
-        <div class="table-responsive">
-          <table id="saTable">
-            <thead>
-              <tr>
-                <th data-sort="select" style="width: 40px;"><input type="checkbox" id="selectAllSA"></th>
-                <th data-sort="symbol">Symbol</th>
-                <th data-sort="shares">Shares</th>
-                <th data-sort="avgCost">Avg Cost</th>
-                <th data-sort="currentPrice">Current Price</th>
-                <th data-sort="totalCost">Total Cost</th>
-                <th data-sort="currentValue">Current Value</th>
-                <th data-sort="percentPortfolio">Portfolio %</th>
-                <th data-sort="gainLoss">Unrealized Gain/Loss</th>
-                <th data-sort="gainLossPercent">Gain/Loss %</th>
-                <th data-sort="xirr">XIRR</th>
-                <th data-sort="weightedDays" class="weighted-days-held">Weighted Avg Days Held</th>
-                <th data-sort="firstDate">First Purchase</th>
-                <th data-sort="lastDate">Last Entry</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="tab-content" id="pro">
-        <div class="table-responsive">
-          <table id="proTable">
-            <thead>
-              <tr>
-                <th data-sort="select" style="width: 40px;"><input type="checkbox" id="selectAllPRO"></th>
-                <th data-sort="symbol">Symbol</th>
-                <th data-sort="shares">Shares</th>
-                <th data-sort="avgCost">Avg Cost</th>
-                <th data-sort="currentPrice">Current Price</th>
-                <th data-sort="totalCost">Total Cost</th>
-                <th data-sort="currentValue">Current Value</th>
-                <th data-sort="percentPortfolio">Portfolio %</th>
-                <th data-sort="gainLoss">Unrealized Gain/Loss</th>
-                <th data-sort="gainLossPercent">Gain/Loss %</th>
-                <th data-sort="xirr">XIRR</th>
-                <th data-sort="weightedDays" class="weighted-days-held">Weighted Avg Days Held</th>
-                <th data-sort="firstDate">First Purchase</th>
-                <th data-sort="lastDate">Last Entry</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="tab-content" id="sold">
-        <div class="table-responsive">
-          <table id="soldTable">
-            <thead>
-              <tr>
-                <th data-sort="select" style="width: 40px;"><input type="checkbox" id="selectAllSold"></th>
-                <th data-sort="symbol">Symbol</th>
-                <th data-sort="portfolio">Portfolio</th>
-                <th data-sort="shares">Shares Sold</th>
-                <th data-sort="avgBuyPrice">Avg Buy Price</th>
-                <th data-sort="avgSellPrice">Avg Sell Price</th>
-                <th data-sort="currentPrice">Current Price</th>
-                <th data-sort="realizedGain">Realized Gain</th>
-                <th data-sort="gainPercent">Gain %</th>
-                <th data-sort="daysHeld">Days Held</th>
-                <th data-sort="xirr">XIRR</th>
-                <th data-sort="missedGain">Missed/Avoided Gain</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="tab-content" id="all">
-        <div class="table-responsive">
-          <table id="allTable">
-            <thead>
-              <tr>
-                <th data-sort="select"><input type="checkbox" id="selectAllAll"></th>
-                <th data-sort="type">Type</th>
-                <th data-sort="portfolio">Portfolio</th>
-                <th data-sort="symbol">Symbol</th>
-                <th data-sort="shares">Shares</th>
-                <th data-sort="price">Price</th>
-                <th data-sort="date">Date</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="tab-content" id="ticker">
-        <div class="ticker-search-controls">
-          <input type="text" id="tickerSearchInput" placeholder="Enter ticker symbol (e.g., AMZN)">
-          <button id="searchTickerBtn">Search</button>
-          <button id="clearTickerBtn">Clear</button>
-        </div>
-        <div class="table-responsive">
-          <table id="tickerTable">
-            <thead>
-              <tr>
-                <th data-sort="select"><input type="checkbox" id="selectAllTicker"></th>
-                <th data-sort="type">Type</th>
-                <th data-sort="portfolio">Portfolio</th>
-                <th data-sort="symbol">Symbol</th>
-                <th data-sort="shares">Shares</th>
-                <th data-sort="price">Price</th>
-                <th data-sort="date">Date</th>
-                <th data-sort="value">Value</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="tab-content" id="cashflow">
+      <!-- All Transactions Tab -->
+      <div id="all-transactions" class="tab-content active">
         <div class="controls">
-          <select id="cashFlowType">
+          <input type="date" id="date" required>
+          <input type="text" id="symbol" placeholder="Ticker Symbol" required>
+          <select id="portfolio" required>
+            <option value="">Select Portfolio</option>
+            <!-- Will be populated dynamically -->
+          </select>
+          <select id="type" required>
+            <option value="">Select Type</option>
+            <option value="buy">Buy</option>
+            <option value="sell">Sell</option>
+            <option value="dividend">Dividend</option>
+            <option value="premium">Options Premium</option>
+          </select>
+          <select id="premiumType" style="display: none;">
+            <option value="">Premium Type</option>
+            <option value="covered_call">Covered Call</option>
+            <option value="csp_assigned">CSP Assigned</option>
+            <option value="csp_expired">CSP Expired</option>
+          </select>
+          <input type="number" id="quantity" placeholder="Quantity" step="any">
+          <input type="number" id="price" placeholder="Price" step="0.01" required>
+          <input type="text" id="notes" placeholder="Notes (optional)">
+          <button id="addTransactionBtn" class="btn-primary">Add Transaction</button>
+        </div>
+
+        <div class="table-controls">
+          <button id="importCsvBtn" class="btn-secondary">📥 Import CSV</button>
+          <input type="file" id="csvFileInput" accept=".csv,.xlsx" style="display: none;">
+          <button id="deleteSelected" class="btn-danger">🗑️ Delete Selected</button>
+          <button id="refreshPricesBtn" class="btn-secondary">🔄 Refresh Prices</button>
+          <div class="search-box">
+            <input type="text" id="tickerSearch" placeholder="Search ticker...">
+            <button id="searchTickerBtn" class="btn-secondary">🔍</button>
+            <button id="clearTickerBtn" class="btn-secondary">✖</button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table id="transactionsTable">
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="selectAll"></th>
+                <th class="sortable" data-sort="date">Date <span class="sort-icon">↕</span></th>
+                <th class="sortable" data-sort="symbol">Ticker <span class="sort-icon">↕</span></th>
+                <th>Company</th>
+                <th>Portfolio</th>
+                <th class="sortable" data-sort="type">Type <span class="sort-icon">↕</span></th>
+                <th class="sortable" data-sort="quantity">Quantity <span class="sort-icon">↕</span></th>
+                <th class="sortable" data-sort="price">Price <span class="sort-icon">↕</span></th>
+                <th>Total</th>
+                <th>Current Price</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody id="transactionsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Total Portfolio Tab -->
+      <div id="total-portfolio" class="tab-content">
+        <div class="table-container">
+          <table id="totalPortfolioTable">
+            <thead>
+              <tr>
+                <th>Ticker</th>
+                <th>Company</th>
+                <th>Shares</th>
+                <th>Avg Cost</th>
+                <th>Current Price</th>
+                <th>Total Cost</th>
+                <th>Market Value</th>
+                <th>Gain/Loss</th>
+                <th>Gain/Loss %</th>
+              </tr>
+            </thead>
+            <tbody id="totalPortfolioBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Custom Portfolio Tabs (dynamically generated) -->
+
+      <!-- Sold Positions Tab -->
+      <div id="sold-positions" class="tab-content">
+        <div class="table-container">
+          <table id="soldPositionsTable">
+            <thead>
+              <tr>
+                <th>Ticker</th>
+                <th>Company</th>
+                <th>Portfolio</th>
+                <th>Buy Date</th>
+                <th>Sell Date</th>
+                <th>Quantity</th>
+                <th>Avg Buy Price</th>
+                <th>Sell Price</th>
+                <th>Total Cost</th>
+                <th>Total Proceeds</th>
+                <th>Realized Gain/Loss</th>
+                <th>Realized Gain/Loss %</th>
+                <th>Days Held</th>
+              </tr>
+            </thead>
+            <tbody id="soldPositionsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Cash Flows Tab -->
+      <div id="cash-flows" class="tab-content">
+        <div class="controls">
+          <input type="date" id="cashFlowDate" required>
+          <select id="cashFlowType" required>
+            <option value="">Flow Type</option>
             <option value="deposit">Deposit</option>
             <option value="withdrawal">Withdrawal</option>
           </select>
-          <input type="number" id="cashAmount" placeholder="Amount" min="0" step="0.01">
-          <input type="date" id="cashDate">
-          <button id="addCashFlowBtn" type="button">Add Cash Flow</button>
-          <button id="deleteCashFlowSelected" type="button">Delete Selected</button>
+          <input type="number" id="cashFlowAmount" placeholder="Amount" step="0.01" required>
+          <input type="text" id="cashFlowNotes" placeholder="Notes (optional)">
+          <button id="addCashFlowBtn" class="btn-primary">Add Cash Flow</button>
         </div>
 
-        <div class="table-responsive">
-          <table id="cashFlowTable">
+        <div class="table-controls">
+          <button id="deleteCashFlowSelected" class="btn-danger">🗑️ Delete Selected</button>
+        </div>
+
+        <div class="table-container">
+          <table id="cashFlowsTable">
             <thead>
               <tr>
-                <th data-sort="select" style="width: 50px;"><input type="checkbox" id="selectAllCashFlow"></th>
-                <th data-sort="type" style="width: 120px;">Type</th>
-                <th data-sort="amount" style="width: 150px;">Amount</th>
-                <th data-sort="date" style="width: 150px;">Date</th>
-                <th data-sort="weightedDays" style="width: 180px;">Weighted Avg Days</th>
+                <th><input type="checkbox" id="selectAllCashFlows"></th>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Amount</th>
+                <th>Notes</th>
               </tr>
             </thead>
-            <tbody></tbody>
+            <tbody id="cashFlowsBody"></tbody>
           </table>
         </div>
       </div>
@@ -318,13 +296,11 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
   <script>
     const SUPABASE_URL = 'https://dssgocxmygwnvoraqrjs.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzc2dvY3hteWd3bnZvcmFxcmpzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njc3NzcsImV4cCI6MjA3NTI0Mzc3N30.OiF9H7pqmHYojVDBhGqeJsFzx9VbjtcwdjK59YsTjCE';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   </script>
-
   <script src="app.js"></script>
 </body>
 </html>

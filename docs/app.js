@@ -1,1470 +1,1084 @@
-const CACHE_DURATION = 4 * 60 * 60 * 1000;
+// Global Variables
 let transactions = [];
-let livePrices = {};
 let cashFlows = [];
-let sortState = {
-  total: { column: 'symbol', direction: 'asc' },
-  rm: { column: 'symbol', direction: 'asc' },
-  sa: { column: 'symbol', direction: 'asc' },
-  pro: { column: 'symbol', direction: 'asc' },
-  cashflow: { column: 'date', direction: 'desc' },
-  ticker: { column: 'symbol', direction: 'asc' },
-  all: { column: 'symbol', direction: 'asc' },
-  sold: { column: 'symbol', direction: 'asc' }
+let livePrices = {};
+let companyCache = JSON.parse(localStorage.getItem('companyCache')) || {};
+let portfolios = JSON.parse(localStorage.getItem('portfolios')) || [{ id: 'total', name: 'Total Portfolio', color: 1 }];
+let sortConfig = { column: null, direction: 'asc' };
+
+const CACHE_DURATION = 4 * 60 * 60 * 1000; // 4 hours
+
+// Portfolio Colors
+const PORTFOLIO_COLORS = {
+  1: '#667eea',
+  2: '#f093fb',
+  3: '#4facfe',
+  4: '#43e97b',
+  5: '#fa709a'
 };
 
-function formatDateDDMMYYYY(date) {
-  const d = new Date(date);
-  return d.toLocaleDateString('en-GB');
-}
+// ============ INITIALIZATION ============
 
-function calculateDaysHeld(startDate, endDate) {
-  const start = new Date(startDate);
-  const end = new Date(endDate || Date.now());
-  const diffTime = Math.abs(end - start);
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-}
-
-function isValidTransaction(t) {
-  if (!t || !t.symbol || !t.shares || isNaN(new Date(t.date).getTime())) {
-    return false;
+function checkFirstVisit() {
+  const hasVisited = localStorage.getItem('hasVisitedPortfolio');
+  if (!hasVisited) {
+    document.getElementById('welcomeModal').classList.add('active');
+    localStorage.setItem('hasVisitedPortfolio', 'true');
+  } else {
+    checkApiKey();
   }
-  if (t.type === 'dividend' && t.price === 0) {
-    return true;
-  }
-  if (t.type === 'premium') {
-    return true;
-  }
-  return t.price && t.price > 0;
 }
 
-function isValidForXIRR(dates, values) {
-  const hasEnoughData = dates.length >= 2 && values.length >= 2;
-  const hasPositive = values.some(v => v > 0);
-  const hasNegative = values.some(v => v < 0);
-  const uniqueDates = new Set(dates.map(d => d.toISOString().split('T')[0])).size;
-  return hasEnoughData && hasPositive && hasNegative && uniqueDates > 1;
-}
-
-function calculateXIRR(dates, values, eps, maxIterations) {
-  eps = eps || 1e-6;
-  maxIterations = maxIterations || 100;
-  if (!isValidForXIRR(dates, values)) return 0;
-  const initialGuesses = [-0.9, -0.5, -0.1, 0.1, 0.5, 0.9];
-  for (let g = 0; g < initialGuesses.length; g++) {
-    let xirr = initialGuesses[g];
-    let iteration = 0;
-    while (iteration < maxIterations) {
-      const npv = values.reduce(function(sum, value, i) {
-        return sum + value / Math.pow(1 + xirr, calculateDaysHeld(dates[0], dates[i]) / 365);
-      }, 0);
-      const derivative = values.reduce(function(sum, value, i) {
-        return sum - value * calculateDaysHeld(dates[0], dates[i]) / (365 * Math.pow(1 + xirr, calculateDaysHeld(dates[0], dates[i]) / 365 + 1));
-      }, 0);
-      if (Math.abs(derivative) < 1e-10) break;
-      const newXirr = xirr - npv / derivative;
-      if (Math.abs(newXirr - xirr) < eps) return newXirr;
-      xirr = newXirr;
-      iteration++;
-    }
+function checkApiKey() {
+  const apiKey = localStorage.getItem('apiKey');
+  if (!apiKey) {
+    document.getElementById('settingsModal').classList.add('active');
+    alert('Please enter your Twelve Data API key to use the portfolio tracker.');
   }
-  return 0;
 }
 
-function calculateXIRRForSymbol(symbol, allTransactions, livePrices) {
-  const symbolTxns = allTransactions.filter(function(t) {
-    return t.symbol === symbol && isValidTransaction(t);
-  });
-  if (symbolTxns.length === 0) return 0;
-  const dates = [];
-  const values = [];
-  let remainingShares = 0;
-  symbolTxns.forEach(function(t) {
-    const date = new Date(t.date);
-    if (isNaN(date.getTime())) return;
-    const amount = t.type === 'buy' ? -t.shares * t.price : t.type === 'sell' ? t.shares * t.price : t.shares * t.price;
-    dates.push(date);
-    values.push(amount);
-    if (t.type === 'buy') remainingShares += t.shares;
-    else if (t.type === 'sell') remainingShares -= t.shares;
-  });
-  const today = new Date();
-  const currentPrice = livePrices[symbol] || 0;
-  if (remainingShares > 0 && currentPrice > 0) {
-    dates.push(today);
-    values.push(remainingShares * currentPrice);
-  }
-  return calculateXIRR(dates, values);
-}
-
-function calculatePortfolioXIRR(transactions, symbolData, livePrices) {
-  const dates = [];
-  const values = [];
+function saveApiKey() {
+  const apiKey = document.getElementById('apiKeyInput').value.trim();
+  const statusEl = document.getElementById('apiKeyStatus');
   
-  transactions.forEach(function(t) {
-    if (!isValidTransaction(t)) return;
+  if (!apiKey) {
+    statusEl.textContent = 'Please enter a valid API key';
+    statusEl.className = 'error';
+    return;
+  }
+  
+  localStorage.setItem('apiKey', apiKey);
+  statusEl.textContent = '✓ API key saved successfully!';
+  statusEl.className = 'success';
+  
+  setTimeout(() => {
+    document.getElementById('settingsModal').classList.remove('active');
+  }, 1500);
+}
 
-    if (!symbolData[t.symbol]) {
-      symbolData[t.symbol] = { 
-        buys: 0, 
-        sells: 0, 
-        totalCost: 0, 
-        firstDate: t.date, 
-        lastDate: t.date,
-        portfolio: t.portfolio
-      };
-    }
+function loadApiKey() {
+  const apiKey = localStorage.getItem('apiKey');
+  if (apiKey) {
+    document.getElementById('apiKeyInput').value = apiKey;
+  }
+}
+
+// ============ PORTFOLIO MANAGEMENT ============
+
+function initializePortfolios() {
+  updatePortfolioDropdown();
+  updatePortfolioTabs();
+  updatePortfolioList();
+}
+
+function updatePortfolioDropdown() {
+  const dropdown = document.getElementById('portfolio');
+  dropdown.innerHTML = '<option value="">Select Portfolio</option>';
+  
+  portfolios.filter(p => p.id !== 'total').forEach(portfolio => {
+    const option = document.createElement('option');
+    option.value = portfolio.id;
+    option.textContent = portfolio.name;
+    dropdown.appendChild(option);
+  });
+}
+
+function updatePortfolioTabs() {
+  const tabsContainer = document.getElementById('mainTabs');
+  
+  // Remove existing custom portfolio tabs
+  const existingCustomTabs = tabsContainer.querySelectorAll('.tab.custom-portfolio');
+  existingCustomTabs.forEach(tab => tab.remove());
+  
+  // Remove existing custom tab content
+  const existingCustomContent = document.querySelectorAll('.tab-content.custom-portfolio');
+  existingCustomContent.forEach(content => content.remove());
+  
+  // Add custom portfolio tabs before "Sold Positions"
+  const soldTab = tabsContainer.querySelector('[data-tab="sold-positions"]');
+  
+  portfolios.filter(p => p.id !== 'total').forEach((portfolio, index) => {
+    // Create tab button
+    const tab = document.createElement('button');
+    tab.className = `tab custom-portfolio portfolio-${portfolio.color}`;
+    tab.dataset.tab = portfolio.id;
+    tab.textContent = portfolio.name;
+    tabsContainer.insertBefore(tab, soldTab);
     
-    if (t.type === 'buy' || t.type === 'dividend' || t.type === 'premium') {
-      if (t.type === 'buy' || t.type === 'dividend') {
-        symbolData[t.symbol].buys += t.shares;
-      }
-      
-      if (t.type === 'buy') {
-        symbolData[t.symbol].totalCost += t.shares * t.price;
-      }
-      
-      symbolData[t.symbol].portfolio = t.portfolio;
-    } else if (t.type === 'sell') {
-      symbolData[t.symbol].sells += t.shares;
-    }
+    // Create tab content
+    const content = document.createElement('div');
+    content.id = portfolio.id;
+    content.className = 'tab-content custom-portfolio';
+    content.innerHTML = `
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th>Company</th>
+              <th>Shares</th>
+              <th>Avg Cost</th>
+              <th>Current Price</th>
+              <th>Total Cost</th>
+              <th>Market Value</th>
+              <th>Gain/Loss</th>
+              <th>Gain/Loss %</th>
+            </tr>
+          </thead>
+          <tbody id="${portfolio.id}Body"></tbody>
+        </table>
+      </div>
+    `;
     
-    const date = new Date(t.date);
-    const amount = t.type === 'buy' ? -t.shares * t.price : 
-           t.type === 'sell' ? t.shares * t.price : 
-           t.shares * t.price;
-
-    dates.push(date);
-    values.push(amount);
+    document.querySelector('.main-panel').appendChild(content);
   });
   
-  let totalCurrentValue = 0;
-  for (const symbol in symbolData) {
-    if (symbolData[symbol].netShares > 0) {
-      totalCurrentValue += symbolData[symbol].currentValue;
-    }
-  }
-  
-  if (totalCurrentValue > 0) {
-    dates.push(new Date());
-    values.push(totalCurrentValue);
-  }
-  
-  return calculateXIRR(dates, values);
+  // Reattach tab listeners
+  initializeTabs();
 }
 
-function initializeTabs() {
-  const tabs = document.querySelectorAll('.tab');
-  const tabContents = document.querySelectorAll('.tab-content');
+function updatePortfolioList() {
+  const listEl = document.getElementById('portfolioList');
+  listEl.innerHTML = '';
   
-  tabs.forEach(function(tab) {
-    tab.addEventListener('click', function() {
-      if (tab.id === 'importCsvBtn') {
-        document.getElementById('csvFileInput').click();
-        return;
-      }
-      
-      tabs.forEach(function(t) {
-        t.classList.remove('active');
-      });
-      tabContents.forEach(function(tc) {
-        tc.classList.remove('active');
-      });
-      tab.classList.add('active');
-      const content = document.getElementById(tab.dataset.tab);
-      if (content) content.classList.add('active');
-      
-      const mainControls = document.querySelectorAll('.controls')[0];
-      const portfolioTabs = ['total', 'rm', 'sa', 'pro'];
-      const tabsWithDelete = ['total', 'rm', 'sa', 'pro', 'all', 'ticker', 'sold'];
-
-      if (mainControls) {
-        mainControls.querySelectorAll('select, input, button').forEach(el => el.style.display = '');
-        
-        if (portfolioTabs.includes(tab.dataset.tab)) {
-          mainControls.style.display = 'flex';
-        } else if (tabsWithDelete.includes(tab.dataset.tab)) {
-          mainControls.style.display = 'flex';
-          mainControls.querySelectorAll('select, input:not([type="checkbox"]), #addTransactionBtn, #clearDataBtn, #importCsvBtn, #refreshPricesBtn').forEach(el => el.style.display = 'none');
-          document.getElementById('deleteSelected').style.display = 'inline-block';
-        } else {
-          mainControls.style.display = 'none';
-        }
-      }
-      
-      refreshPricesAndNames();
+  portfolios.filter(p => p.id !== 'total').forEach((portfolio, index) => {
+    const item = document.createElement('div');
+    item.className = `portfolio-item portfolio-${portfolio.color}`;
+    item.innerHTML = `
+      <input type="text" value="${portfolio.name}" data-id="${portfolio.id}" class="portfolio-name-input">
+      <button class="btn-delete" onclick="deletePortfolio('${portfolio.id}')">Delete</button>
+    `;
+    listEl.appendChild(item);
+  });
+  
+  // Add listeners for name changes
+  document.querySelectorAll('.portfolio-name-input').forEach(input => {
+    input.addEventListener('change', function() {
+      updatePortfolioName(this.dataset.id, this.value);
     });
   });
 }
 
-function initializeSortListeners() {
-  const tables = {
-    total: document.getElementById('totalTable'),
-    rm: document.getElementById('rmTable'),
-    sa: document.getElementById('saTable'),
-    pro: document.getElementById('proTable'),
-    ticker: document.getElementById('tickerTable'),
-    all: document.getElementById('allTable'),
-    sold: document.getElementById('soldTable')
+function addPortfolio() {
+  if (portfolios.length >= 6) { // 1 total + 5 custom
+    alert('Maximum 5 custom portfolios allowed');
+    return;
+  }
+  
+  const portfolioNumber = portfolios.length;
+  const newPortfolio = {
+    id: `portfolio-${Date.now()}`,
+    name: `Portfolio ${portfolioNumber}`,
+    color: portfolioNumber
   };
-  for (const portfolio in tables) {
-    const table = tables[portfolio];
-    if (table) {
-      const headers = table.querySelectorAll('th');
-      headers.forEach(function(header) {
-        header.addEventListener('click', function() {
-          const column = header.dataset.sort;
-          if (!column || column === 'select') return;
-          const currentDirection = sortState[portfolio].direction;
-          const newDirection = currentDirection === 'asc' ? 'desc' : 'asc';
-          sortState[portfolio] = { column: column, direction: newDirection };
-          headers.forEach(function(h) {
-            h.classList.remove('sort-asc', 'sort-desc');
-          });
-          header.classList.add('sort-' + newDirection);
-          sortTable(table, column, newDirection);
-        });
-      });
-    }
+  
+  portfolios.push(newPortfolio);
+  savePortfolios();
+  initializePortfolios();
+}
+
+function updatePortfolioName(id, newName) {
+  const portfolio = portfolios.find(p => p.id === id);
+  if (portfolio) {
+    portfolio.name = newName;
+    savePortfolios();
+    updatePortfolioTabs();
   }
 }
+
+async function deletePortfolio(id) {
+  if (!confirm('Delete this portfolio? Transactions will remain but lose portfolio assignment.')) {
+    return;
+  }
+  
+  portfolios = portfolios.filter(p => p.id !== id);
+  savePortfolios();
+  
+  // Update transactions to remove this portfolio
+  transactions.forEach(t => {
+    if (t.portfolio === id) {
+      t.portfolio = '';
+    }
+  });
+  
+  await saveDataToSupabase();
+  initializePortfolios();
+  refreshPricesAndNames();
+}
+
+function savePortfolios() {
+  localStorage.setItem('portfolios', JSON.stringify(portfolios));
+}
+
+// ============ SUPABASE FUNCTIONS ============
+
+async function loadDataFromSupabase() {
+  try {
+    const [transactionsData, cashFlowsData] = await Promise.all([
+      supabase.from('transactions').select('*').order('date', { ascending: false }),
+      supabase.from('cash_flows').select('*').order('date', { ascending: false })
+    ]);
+
+    if (transactionsData.data) {
+      transactions = transactionsData.data;
+    }
+    if (cashFlowsData.data) {
+      cashFlows = cashFlowsData.data;
+    }
+
+    console.log('Loaded from Supabase:', transactions.length, 'transactions,', cashFlows.length, 'cash flows');
+  } catch (error) {
+    console.error('Error loading from Supabase:', error);
+  }
+}
+
+async function saveDataToSupabase() {
+  try {
+    await supabase.from('transactions').delete().neq('id', 0);
+    if (transactions.length > 0) {
+      await supabase.from('transactions').insert(transactions);
+    }
+
+    await supabase.from('cash_flows').delete().neq('id', 0);
+    if (cashFlows.length > 0) {
+      await supabase.from('cash_flows').insert(cashFlows);
+    }
+
+    console.log('Saved to Supabase');
+  } catch (error) {
+    console.error('Error saving to Supabase:', error);
+  }
+}
+
+// ============ TABS ============
+
+function initializeTabs() {
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+      const targetTab = this.dataset.tab;
+      
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      
+      this.classList.add('active');
+      document.getElementById(targetTab).classList.add('active');
+      
+      // Show/hide cash flow summary cards
+      if (targetTab === 'cash-flows') {
+        document.getElementById('cashFlowCard1').style.display = 'block';
+        document.getElementById('cashFlowCard2').style.display = 'block';
+        document.getElementById('cashFlowCard3').style.display = 'block';
+      } else {
+        document.getElementById('cashFlowCard1').style.display = 'none';
+        document.getElementById('cashFlowCard2').style.display = 'none';
+        document.getElementById('cashFlowCard3').style.display = 'none';
+      }
+    });
+  });
+}
+
+// ============ TRANSACTIONS ============
 
 async function addTransaction() {
-  const type = document.getElementById('type').value;
-  const portfolio = document.getElementById('portfolio').value;
+  const date = document.getElementById('date').value;
   const symbol = document.getElementById('symbol').value.toUpperCase().trim();
-  const shares = parseFloat(document.getElementById('shares').value);
-  const priceInput = document.getElementById('price').value;
-  const price = priceInput === '' ? 0 : parseFloat(priceInput);
-  const dateInput = document.getElementById('date').value;
-  
-  if (!symbol || isNaN(shares) || !dateInput) {
-    alert('Please fill in symbol, shares, and date');
-    return;
-  }
-  
-  if (type !== 'premium' && type !== 'dividend' && (isNaN(price) || price <= 0)) {
-    alert('Please enter a valid price');
-    return;
-  }
-  
-  const date = dateInput + 'T00:00:00Z';
-  const transaction = { 
-    type: type, 
-    portfolio: portfolio, 
-    symbol: symbol, 
-    shares: shares, 
-    price: price, 
-    date: date
-  };
-  
-  if (type === 'premium') {
-    transaction.premium_type = document.getElementById('premiumType').value;
-  }
-  
-  if (isValidTransaction(transaction)) {
-    const { error } = await supabase.from('transactions').insert([transaction]);
-    
-    if (error) {
-      console.error('Error saving transaction:', error);
-      alert('Error saving transaction: ' + error.message);
-      return;
-    }
-    
-    transactions.push(transaction);
-    
-    document.getElementById('symbol').value = '';
-    document.getElementById('shares').value = '';
-    document.getElementById('price').value = '';
-    document.getElementById('date').value = '';
-    
-    if (!livePrices[symbol]) {
-      await getLivePrice(symbol);
-    } else {
-      refreshPricesAndNames();
-    }
-  } else {
-    alert('Invalid transaction data');
-  }
-}
+  const portfolio = document.getElementById('portfolio').value;
+  const type = document.getElementById('type').value;
+  const quantity = parseFloat(document.getElementById('quantity').value) || 0;
+  const price = parseFloat(document.getElementById('price').value);
+  const notes = document.getElementById('notes').value.trim();
+  const premiumType = document.getElementById('premiumType').value;
 
-async function confirmClearData() {
-  if (confirm('Are you sure you want to clear all data? This action cannot be undone.')) {
-    const { error: txnError } = await supabase
-      .from('transactions')
-      .delete()
-      .neq('id', 0);
-    
-    const { error: cashError } = await supabase
-      .from('cash_flows')
-      .delete()
-      .neq('id', 0);
-    
-    const { error: priceError } = await supabase
-      .from('price_cache')
-      .delete()
-      .neq('symbol', '');
-    
-    if (txnError || cashError || priceError) {
-      console.error('Error clearing data:', { txnError, cashError, priceError });
-      alert('Error clearing some data');
-    }
-    
-    transactions = [];
-    cashFlows = [];
-    livePrices = {};
-    
-    refreshPricesAndNames();
-    updateCashFlowTable();
+  if (!date || !symbol || !portfolio || !type || isNaN(price)) {
+    alert('Please fill in all required fields');
+    return;
   }
+
+  if ((type === 'buy' || type === 'sell') && quantity === 0) {
+    alert('Quantity is required for buy/sell transactions');
+    return;
+  }
+
+  if (type === 'premium' && !premiumType) {
+    alert('Please select premium type');
+    return;
+  }
+
+  const transaction = {
+    id: Date.now(),
+    date,
+    symbol,
+    portfolio,
+    type,
+    quantity: type === 'sell' ? -Math.abs(quantity) : quantity,
+    price,
+    notes,
+    premium_type: type === 'premium' ? premiumType : null
+  };
+
+  transactions.push(transaction);
+  await saveDataToSupabase();
+  
+  document.getElementById('date').value = '';
+  document.getElementById('symbol').value = '';
+  document.getElementById('portfolio').value = '';
+  document.getElementById('type').value = '';
+  document.getElementById('quantity').value = '';
+  document.getElementById('price').value = '';
+  document.getElementById('notes').value = '';
+  document.getElementById('premiumType').value = '';
+  document.getElementById('premiumType').style.display = 'none';
+
+  await refreshPricesAndNames();
 }
 
 async function confirmDeleteSelected() {
-  const activeTab = document.querySelector('.tab.active');
-  const currentTab = activeTab ? activeTab.dataset.tab : 'total';
-  
-  let tableId;
-  if (currentTab === 'total') tableId = 'totalTable';
-  else if (currentTab === 'rm') tableId = 'rmTable';
-  else if (currentTab === 'sa') tableId = 'saTable';
-  else if (currentTab === 'pro') tableId = 'proTable';
-  else if (currentTab === 'all') tableId = 'allTable';
-  else if (currentTab === 'ticker') tableId = 'tickerTable';
-  else if (currentTab === 'sold') tableId = 'soldTable';
-  else return;
-  
-  const table = document.getElementById(tableId);
-  if (!table) return;
-  
-  const checkboxes = table.querySelectorAll('tbody .select-row:checked');
-  
+  const checkboxes = document.querySelectorAll('#transactionsBody input[type="checkbox"]:checked');
   if (checkboxes.length === 0) {
     alert('Please select transactions to delete');
     return;
   }
-  
-  if (!confirm('Are you sure you want to delete ' + checkboxes.length + ' selected transaction(s)?')) {
+
+  if (!confirm(`Delete ${checkboxes.length} selected transaction(s)?`)) {
     return;
   }
+
+  const idsToDelete = Array.from(checkboxes).map(cb => parseInt(cb.dataset.id));
+  transactions = transactions.filter(t => !idsToDelete.includes(t.id));
   
-  const transactionsToDelete = [];
-  checkboxes.forEach(function(checkbox) {
-    const row = checkbox.closest('tr');
-    const cells = row.cells;
-    
-    if (['totalTable', 'rmTable', 'saTable', 'proTable'].includes(tableId)) {
-      const symbol = cells[1].textContent;
-      transactionsToDelete.push({ symbol: symbol, type: 'portfolio' });
-    }
-    else if (tableId === 'allTable' || tableId === 'tickerTable') {
-      const type = cells[1].textContent.toLowerCase();
-      const portfolio = cells[2].textContent.toLowerCase();
-      const symbol = cells[3].textContent;
-      const shares = parseFloat(cells[4].textContent);
-      const price = parseFloat(cells[5].textContent.replace('$', ''));
-      const date = cells[6].textContent;
-      
-      transactionsToDelete.push({ type: type, portfolio: portfolio, symbol: symbol, shares: shares, price: price, date: date });
-    }
-    else if (tableId === 'soldTable') {
-      const symbolText = cells[1].textContent;
-      const symbol = symbolText.replace(' (Premium)', '').trim();
-      const isPremium = symbolText.includes('(Premium)');
-      
-      if (isPremium) {
-        transactionsToDelete.push({ symbol: symbol, type: 'premium_delete' });
-      } else {
-        transactionsToDelete.push({ symbol: symbol, type: 'portfolio' });
-      }
-    }
-  });
-  
-  if (transactionsToDelete[0] && (transactionsToDelete[0].type === 'portfolio' || transactionsToDelete[0].type === 'premium_delete')) {
-    for (const item of transactionsToDelete) {
-      if (item.type === 'premium_delete') {
-        const { error } = await supabase
-          .from('transactions')
-          .delete()
-          .eq('symbol', item.symbol)
-          .eq('type', 'premium');
-        
-        if (error) {
-          console.error('Error deleting premium:', error);
-        }
-      } else {
-        const { error } = await supabase
-          .from('transactions')
-          .delete()
-          .eq('symbol', item.symbol);
-        
-        if (error) {
-          console.error('Error deleting:', error);
-        }
-      }
-    }
-  } else {
-    for (const item of transactionsToDelete) {
-      const dateParts = item.date.split('/');
-      const isoDate = dateParts[2] + '-' + dateParts[1] + '-' + dateParts[0] + 'T00:00:00Z';
-      
-      const { error } = await supabase
-        .from('transactions')
-        .delete()
-        .match({
-          type: item.type,
-          portfolio: item.portfolio,
-          symbol: item.symbol,
-          shares: item.shares,
-          price: item.price,
-          date: isoDate
-        });
-      
-      if (error) {
-        console.error('Error deleting specific transaction:', error);
-      }
-    }
-  }
-  
-  await loadDataFromSupabase();
+  await saveDataToSupabase();
   refreshPricesAndNames();
 }
-// ============ CSV EXPORT ============
 
-function exportTransactionsToCSV() {
-  if (transactions.length === 0) {
-    alert('No transactions to export');
-    return;
-  }
+// ============ DISPLAY FUNCTIONS ============
 
-  // Create CSV header
-  const headers = ['Date', 'Symbol', 'Portfolio', 'Type', 'Quantity', 'Price', 'Notes', 'PremiumType'];
-  
-  // Create CSV rows
-  const rows = transactions.map(t => {
-    return [
-      t.date,
-      t.symbol,
-      t.portfolio,
-      t.type,
-      t.quantity,
-      t.price,
-      t.notes || '',
-      t.premium_type || ''
-    ];
-  });
+function updateTransactionsTable() {
+  const tbody = document.getElementById('transactionsBody');
+  tbody.innerHTML = '';
 
-  // Combine headers and rows
-  const csvContent = [headers, ...rows]
-    .map(row => row.map(cell => `"${cell}"`).join(','))
-    .join('\n');
-
-  // Create blob and download
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  
-  const timestamp = new Date().toISOString().split('T')[0];
-  link.setAttribute('href', url);
-  link.setAttribute('download', `portfolio-transactions-${timestamp}.csv`);
-  link.style.visibility = 'hidden';
-  
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  
-  alert(`Exported ${transactions.length} transactions to CSV`);
-}
-function handleCsvImport(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const data = new Uint8Array(e.target.result);
-    let csvData;
+  const sortedTransactions = [...transactions].sort((a, b) => {
+    if (!sortConfig.column) return new Date(b.date) - new Date(a.date);
     
-    if (file.name.endsWith('.xlsx')) {
-      const workbook = XLSX.read(data, { type: 'array' });
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      csvData = XLSX.utils.sheet_to_csv(firstSheet);
+    let aVal = a[sortConfig.column];
+    let bVal = b[sortConfig.column];
+    
+    if (sortConfig.column === 'date') {
+      aVal = new Date(aVal);
+      bVal = new Date(bVal);
+    } else if (['quantity', 'price'].includes(sortConfig.column)) {
+      aVal = parseFloat(aVal) || 0;
+      bVal = parseFloat(bVal) || 0;
+    }
+    
+    if (sortConfig.direction === 'asc') {
+      return aVal > bVal ? 1 : -1;
     } else {
-      csvData = new TextDecoder().decode(data);
+      return aVal < bVal ? 1 : -1;
     }
-    
-    processCsvData(csvData);
-    event.target.value = '';
-  };
-  reader.readAsArrayBuffer(file);
+  });
+
+  sortedTransactions.forEach(transaction => {
+    const row = tbody.insertRow();
+    const currentPrice = livePrices[transaction.symbol] || 0;
+    const companyName = companyCache[transaction.symbol] || '';
+    const portfolioObj = portfolios.find(p => p.id === transaction.portfolio);
+    const portfolioName = portfolioObj ? portfolioObj.name : 'Unknown';
+
+    row.innerHTML = `
+      <td><input type="checkbox" data-id="${transaction.id}"></td>
+      <td>${transaction.date}</td>
+      <td><strong>${transaction.symbol}</strong></td>
+      <td>${companyName}</td>
+      <td>${portfolioName}</td>
+      <td>${transaction.type}${transaction.premium_type ? ` (${transaction.premium_type})` : ''}</td>
+      <td>${transaction.quantity}</td>
+      <td>$${transaction.price.toFixed(2)}</td>
+      <td>$${(transaction.quantity * transaction.price).toFixed(2)}</td>
+      <td>$${currentPrice.toFixed(2)}</td>
+      <td>${transaction.notes || ''}</td>
+    `;
+  });
+
+  updateSelectAllCheckbox();
 }
 
-async function processCsvData(csvData) {
-  const lines = csvData.split('\n').filter(function(line) {
-    return line.trim();
-  });
-  if (lines.length <= 1) return;
-  
-  const headers = lines[0].split(',').map(function(h) {
-    return h.trim().toLowerCase();
-  });
-  const dataLines = lines.slice(1);
-  
-  const newTransactions = [];
-  
-  dataLines.forEach(function(line) {
-    const values = line.split(',').map(function(v) {
-      return v.trim();
-    });
-    if (values.length !== headers.length) return;
-    
-    const transaction = {};
-    headers.forEach(function(header, index) {
-      var value = values[index];
-      if (header === 'date') {
-        var dateObj;
-        if (value.includes('/')) {
-          var parts = value.split('/');
-          if (parts.length === 3) {
-            dateObj = new Date(parts[2] + '-' + parts[1] + '-' + parts[0]);
-          }
-        } else {
-          dateObj = new Date(value);
-        }
-        
-        if (dateObj && !isNaN(dateObj.getTime())) {
-          value = dateObj.toISOString().split('T')[0] + 'T00:00:00Z';
-        } else {
-          console.warn('Invalid date format:', value, 'Using today');
-          value = new Date().toISOString().split('T')[0] + 'T00:00:00Z';
-        }
-      } else if (header === 'shares' || header === 'price') {
-        value = parseFloat(value) || 0;
-      } else if (header === 'symbol') {
-        value = value.toUpperCase();
-      }
-      transaction[header] = value;
-    });
-    
-    if (isValidTransaction(transaction)) {
-      newTransactions.push(transaction);
-      transactions.push(transaction);
-    }
-  });
-  
-  if (newTransactions.length > 0) {
-    const { error } = await supabase
-      .from('transactions')
-      .insert(newTransactions);
-    
-    if (error) {
-      console.error('Error saving CSV transactions:', error);
-      alert('Error importing CSV: ' + error.message);
-      return;
-    }
-  }
-  
-  var newSymbols = [];
-  var seen = {};
-  transactions.forEach(function(t) {
-    if (!seen[t.symbol]) {
-      if (!livePrices[t.symbol]) {
-        newSymbols.push(t.symbol);
-      }
-      seen[t.symbol] = true;
-    }
-  });
-  
-  if (newSymbols.length > 0) {
-    console.log('Fetching prices for ' + newSymbols.length + ' new symbols from CSV');
-    await fetchLivePrices(newSymbols);
-    refreshPricesAndNames();
-  } else {
-    refreshPricesAndNames();
-  }
-}
-
-function searchTicker() {
-  const tickerInput = document.getElementById('tickerSearchInput').value.toUpperCase().trim();
-  if (!tickerInput) return;
-  
-  const table = document.getElementById('tickerTable');
-  const tbody = table.querySelector('tbody');
-  tbody.innerHTML = '';
-
-  const tickerTxns = transactions.filter(function(t) {
-    return t.symbol === tickerInput && isValidTransaction(t);
-  });
-  if (tickerTxns.length === 0) {
-    const row = document.createElement('tr');
-    row.innerHTML = '<td></td><td colspan="7">No data available for ' + tickerInput + '</td>';
-    tbody.appendChild(row);
-    return;
-  }
-
-  let totalShares = 0;
-  let totalDividends = 0;
-  tickerTxns.forEach(function(t) {
-    if (t.type === 'buy') totalShares += t.shares;
-    else if (t.type === 'sell') totalShares -= t.shares;
-    else if (t.type === 'dividend') {
-      totalShares += t.shares;
-      totalDividends += t.shares * t.price;
-    }
-  });
-
-  getLivePrice(tickerInput);
-  const summaryRow = document.createElement('tr');
-  var priceDisplay = livePrices[tickerInput] ? '$' + livePrices[tickerInput].toFixed(2) : 'N/A';
-  summaryRow.innerHTML = '<td><input type="checkbox" class="select-row"></td><td>SUMMARY</td><td>ALL</td><td>' + tickerInput + '</td><td>' + totalShares.toFixed(2) + '</td><td>' + priceDisplay + '</td><td>' + formatDateDDMMYYYY(Date.now()) + '</td><td>$' + totalDividends.toFixed(2) + '</td>';
-  tbody.appendChild(summaryRow);
-
-  tickerTxns.forEach(function(t) {
-    const value = t.type === 'dividend' ? t.shares * t.price : t.type === 'buy' ? -t.shares * t.price : t.shares * t.price;
-    const txRow = document.createElement('tr');
-    txRow.innerHTML = '<td><input type="checkbox" class="select-row"></td><td>' + t.type.toUpperCase() + '</td><td>' + t.portfolio.toUpperCase() + '</td><td>' + t.symbol + '</td><td>' + t.shares.toFixed(2) + '</td><td>$' + t.price.toFixed(2) + '</td><td>' + formatDateDDMMYYYY(t.date) + '</td><td>' + (t.type === 'dividend' ? '$' + value.toFixed(2) : '') + '</td>';
-    tbody.appendChild(txRow);
-  });
-}
-
-function clearTickerSearch() {
-  document.getElementById('tickerSearchInput').value = '';
-  const tbody = document.getElementById('tickerTable').querySelector('tbody');
-  tbody.innerHTML = '';
-}
-
-function sortTable(table, column, direction) {
-  if (!table || !(table instanceof HTMLTableElement)) return;
-  const tbody = table.querySelector('tbody');
+function updatePortfolioTable(portfolioId, tbodyId) {
+  const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
-  const rows = Array.from(tbody.querySelectorAll('tr'));
-  const headers = Array.from(table.querySelectorAll('th'));
-  const columnIndex = headers.findIndex(function(th) {
-    return th.dataset.sort === column;
-  });
-  if (columnIndex === -1) return;
   
-  rows.sort(function(a, b) {
-    if (!a.cells[columnIndex] || !b.cells[columnIndex]) return 0;
-    
-    let aValue = a.cells[columnIndex].textContent;
-    let bValue = b.cells[columnIndex].textContent;
-    aValue = aValue.replace(/\$/g, '').replace(/%/g, '').replace(/ days/g, '').trim();
-    bValue = bValue.replace(/\$/g, '').replace(/%/g, '').replace(/ days/g, '').trim();
-    
-    if (aValue.match(/^\d{2}\/\d{2}\/\d{4}$/) && bValue.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-      const aParts = aValue.split('/');
-      const bParts = bValue.split('/');
-      aValue = new Date(aParts[2], aParts[1] - 1, aParts[0]).getTime();
-      bValue = new Date(bParts[2], bParts[1] - 1, bParts[0]).getTime();
-    } else if (!isNaN(aValue) && !isNaN(bValue)) {
-      aValue = parseFloat(aValue);
-      bValue = parseFloat(bValue);
-    }
-    
-    if (aValue < bValue) return direction === 'asc' ? -1 : 1;
-    if (aValue > bValue) return direction === 'asc' ? 1 : -1;
-    return 0;
-  });
-  rows.forEach(function(row) {
-    tbody.appendChild(row);
+  tbody.innerHTML = '';
+
+  const holdings = calculateHoldings(portfolioId);
+  
+  Object.entries(holdings).forEach(([symbol, data]) => {
+    if (data.shares === 0) return;
+
+    const currentPrice = livePrices[symbol] || 0;
+    const companyName = companyCache[symbol] || '';
+    const marketValue = data.shares * currentPrice;
+    const gainLoss = marketValue - data.totalCost;
+    const gainLossPercent = data.totalCost > 0 ? (gainLoss / data.totalCost) * 100 : 0;
+
+    const row = tbody.insertRow();
+    row.innerHTML = `
+      <td><strong>${symbol}</strong></td>
+      <td>${companyName}</td>
+      <td>${data.shares.toFixed(2)}</td>
+      <td>$${data.avgCost.toFixed(2)}</td>
+      <td>$${currentPrice.toFixed(2)}</td>
+      <td>$${data.totalCost.toFixed(2)}</td>
+      <td>$${marketValue.toFixed(2)}</td>
+      <td class="${gainLoss >= 0 ? 'positive' : 'negative'}">$${gainLoss.toFixed(2)}</td>
+      <td class="${gainLossPercent >= 0 ? 'positive' : 'negative'}">${gainLossPercent.toFixed(2)}%</td>
+    `;
   });
 }
 
-function refreshPricesAndNames() {
-  const symbolData = {};
-  const portfolioHoldings = { rm: {}, sa: {}, pro: {} };
+function calculateHoldings(portfolioId) {
+  const holdings = {};
   
-  transactions.forEach(function(t) {
-    if (!isValidTransaction(t)) return;
-    if (!symbolData[t.symbol]) {
-      symbolData[t.symbol] = { 
-        buys: 0,
-        paidShares: 0,
-        sells: 0, 
-        totalCost: 0, 
-        firstDate: t.date, 
-        lastDate: t.date,
-        portfolio: t.portfolio
-      };
+  const filteredTransactions = portfolioId === 'total' 
+    ? transactions 
+    : transactions.filter(t => t.portfolio === portfolioId);
+
+  filteredTransactions.forEach(t => {
+    if (!holdings[t.symbol]) {
+      holdings[t.symbol] = { shares: 0, totalCost: 0, avgCost: 0 };
     }
-    
-    if (t.type === 'buy' || t.type === 'dividend' || t.type === 'premium') {
-      if (t.type === 'buy' || t.type === 'dividend') {
-        symbolData[t.symbol].buys += t.shares;
-      }
+
+    if (t.type === 'buy') {
+      const costBasisReduction = getPremiumCostBasisReduction(t.symbol, t.date);
+      const effectiveCost = Math.max(0, t.price - costBasisReduction);
       
-      if (t.type === 'buy') {
-        symbolData[t.symbol].totalCost += t.shares * t.price;
-      }
-      
-      symbolData[t.symbol].portfolio = t.portfolio;
+      holdings[t.symbol].shares += t.quantity;
+      holdings[t.symbol].totalCost += t.quantity * effectiveCost;
     } else if (t.type === 'sell') {
-      symbolData[t.symbol].sells += t.shares;
+      holdings[t.symbol].shares += t.quantity;
+      holdings[t.symbol].totalCost += t.quantity * t.price;
+    } else if (t.type === 'dividend') {
+      holdings[t.symbol].totalCost -= t.price;
+    } else if (t.type === 'premium') {
+      if (t.premium_type === 'covered_call') {
+        holdings[t.symbol].totalCost -= t.price;
+      }
     }
-    
-    if (t.date < symbolData[t.symbol].firstDate) symbolData[t.symbol].firstDate = t.date;
-    if (t.date > symbolData[t.symbol].lastDate) symbolData[t.symbol].lastDate = t.date;
+
+    if (holdings[t.symbol].shares !== 0) {
+      holdings[t.symbol].avgCost = holdings[t.symbol].totalCost / holdings[t.symbol].shares;
+    }
   });
 
-  const portfolioData = { rm: 0, sa: 0, pro: 0, totalValue: 0, totalCost: 0 };
+  return holdings;
+}
+
+function getPremiumCostBasisReduction(symbol, buyDate) {
+  let reduction = 0;
   
-  for (const symbol in symbolData) {
-    const netShares = symbolData[symbol].buys - symbolData[symbol].sells;
-    if (netShares > 0.001) {
-      let baseCost = symbolData[symbol].totalCost;
+  transactions.forEach(t => {
+    if (t.symbol === symbol && t.type === 'premium' && t.premium_type === 'csp_assigned' && t.date <= buyDate) {
+      reduction += t.price;
+    }
+  });
+  
+  return reduction;
+}
+
+function updateSoldPositions() {
+  const tbody = document.getElementById('soldPositionsBody');
+  tbody.innerHTML = '';
+
+  const sold = {};
+
+  transactions.forEach(t => {
+    const key = `${t.symbol}_${t.portfolio}`;
+    
+    if (!sold[key]) {
+      sold[key] = { 
+        symbol: t.symbol, 
+        portfolio: t.portfolio,
+        buys: [], 
+        sells: [], 
+        premiums: [] 
+      };
+    }
+
+    if (t.type === 'buy') {
+      sold[key].buys.push(t);
+    } else if (t.type === 'sell') {
+      sold[key].sells.push(t);
+    } else if (t.type === 'premium' && t.premium_type === 'csp_expired') {
+      sold[key].premiums.push(t);
+    }
+  });
+
+  Object.values(sold).forEach(data => {
+    data.sells.forEach(sell => {
+      const portfolioObj = portfolios.find(p => p.id === data.portfolio);
+      const portfolioName = portfolioObj ? portfolioObj.name : 'Unknown';
+      const companyName = companyCache[data.symbol] || '';
       
-      const coveredCallPremiums = transactions.filter(function(t) {
-        return t.symbol === symbol && 
-               t.type === 'premium' && 
-               t.premium_type === 'covered_call';
-      }).reduce(function(sum, t) {
-        return sum + (t.shares * t.price);
-      }, 0);
+      const relevantBuys = data.buys.filter(b => b.date <= sell.date);
       
-      const cspAssignedPremiums = transactions.filter(function(t) {
-        return t.symbol === symbol && 
-               t.type === 'premium' && 
-               t.premium_type === 'csp_assigned';
-      }).reduce(function(sum, t) {
-        return sum + (t.shares * t.price);
-      }, 0);
-      
-      const adjustedTotalCost = baseCost - coveredCallPremiums - cspAssignedPremiums;
-      
-      const avgCost = symbolData[symbol].buys > 0 ? adjustedTotalCost / symbolData[symbol].buys : 0;
+      if (relevantBuys.length > 0) {
+        const totalBuyQty = relevantBuys.reduce((sum, b) => sum + b.quantity, 0);
+        const totalBuyCost = relevantBuys.reduce((sum, b) => sum + (b.quantity * b.price), 0);
+        const avgBuyPrice = totalBuyCost / totalBuyQty;
+        
+        const sellQty = Math.abs(sell.quantity);
+        const sellProceeds = sellQty * sell.price;
+        const sellCost = sellQty * avgBuyPrice;
+        const gainLoss = sellProceeds - sellCost;
+        const gainLossPercent = (gainLoss / sellCost) * 100;
+        
+        const buyDate = relevantBuys[0].date;
+        const daysHeld = Math.floor((new Date(sell.date) - new Date(buyDate)) / (1000 * 60 * 60 * 24));
+
+        const row = tbody.insertRow();
+        row.innerHTML = `
+          <td><strong>${data.symbol}</strong></td>
+          <td>${companyName}</td>
+          <td>${portfolioName}</td>
+          <td>${buyDate}</td>
+          <td>${sell.date}</td>
+          <td>${sellQty.toFixed(2)}</td>
+          <td>$${avgBuyPrice.toFixed(2)}</td>
+          <td>$${sell.price.toFixed(2)}</td>
+          <td>$${sellCost.toFixed(2)}</td>
+          <td>$${sellProceeds.toFixed(2)}</td>
+          <td class="${gainLoss >= 0 ? 'positive' : 'negative'}">$${gainLoss.toFixed(2)}</td>
+          <td class="${gainLossPercent >= 0 ? 'positive' : 'negative'}">${gainLossPercent.toFixed(2)}%</td>
+          <td>${daysHeld}</td>
+        `;
+      }
+    });
+
+    // CSP Expired
+    data.premiums.forEach(premium => {
+      const portfolioObj = portfolios.find(p => p.id === data.portfolio);
+      const portfolioName = portfolioObj ? portfolioObj.name : 'Unknown';
+      const companyName = companyCache[data.symbol] || '';
+
+      const row = tbody.insertRow();
+      row.innerHTML = `
+        <td><strong>${data.symbol}</strong></td>
+        <td>${companyName}</td>
+        <td>${portfolioName}</td>
+        <td>N/A</td>
+        <td>${premium.date}</td>
+        <td>CSP</td>
+        <td>N/A</td>
+        <td>N/A</td>
+        <td>$0.00</td>
+        <td>$${premium.price.toFixed(2)}</td>
+        <td class="positive">$${premium.price.toFixed(2)}</td>
+        <td class="positive">100.00%</td>
+        <td>N/A</td>
+      `;
+    });
+  });
+}
+
+function updateSummary() {
+  const holdings = calculateHoldings('total');
+  
+  let totalValue = 0;
+  let totalCost = 0;
+  let unrealizedGain = 0;
+  
+  Object.entries(holdings).forEach(([symbol, data]) => {
+    if (data.shares > 0) {
       const currentPrice = livePrices[symbol] || 0;
-      const currentValue = netShares * currentPrice;
-      const totalCostForHolding = netShares * avgCost;
-      
-      symbolData[symbol].netShares = netShares;
-      symbolData[symbol].avgCost = avgCost;
-      symbolData[symbol].currentPrice = currentPrice;
-      symbolData[symbol].currentValue = currentValue;
-      symbolData[symbol].totalCost = totalCostForHolding;
-      symbolData[symbol].gainLoss = currentValue - totalCostForHolding;
-      symbolData[symbol].gainLossPercent = totalCostForHolding ? (symbolData[symbol].gainLoss / totalCostForHolding * 100).toFixed(2) : 0;
-      symbolData[symbol].xirr = calculateXIRRForSymbol(symbol, transactions, livePrices);
-      
-      const buyTxns = transactions.filter(function(t) {
-        return t.symbol === symbol && (t.type === 'buy' || t.type === 'dividend');
-      });
-      const totalBuyShares = buyTxns.reduce(function(sum, t) {
-        return sum + t.shares;
-      }, 0);
-      symbolData[symbol].weightedDays = totalBuyShares > 0 ? buyTxns.reduce(function(sum, t) {
-        var days = calculateDaysHeld(t.date);
-        return sum + t.shares * days;
-      }, 0) / totalBuyShares : 0;
-
-      const portfolio = symbolData[symbol].portfolio;
-      portfolioHoldings[portfolio][symbol] = true;
-      portfolioData.totalValue += (currentValue || 0);
-      portfolioData.totalCost += (totalCostForHolding || 0);
-    }
-  }
-
-  portfolioData.rm = Object.keys(portfolioHoldings.rm).length;
-  portfolioData.sa = Object.keys(portfolioHoldings.sa).length;
-  portfolioData.pro = Object.keys(portfolioHoldings.pro).length;
-
-  const soldData = {};
-
-  transactions.forEach(function(t) {
-    if (t.type === 'sell') {
-      const saleKey = t.symbol + '_sale_' + t.date;
-      
-      const symbolTxns = transactions.filter(function(tx) {
-        return tx.symbol === t.symbol && new Date(tx.date) <= new Date(t.date);
-      });
-      
-      let totalBought = 0;
-      let totalCost = 0;
-      
-      symbolTxns.forEach(function(tx) {
-        if (tx.type === 'buy') {
-          totalBought += tx.shares;
-          totalCost += tx.shares * tx.price;
-        }
-      });
-      
-      const avgCostBasis = totalBought > 0 ? totalCost / totalBought : 0;
-      const costBasisForSale = t.shares * avgCostBasis;
-      const proceeds = t.shares * t.price;
-
-      const coveredCallPremiums = transactions.filter(function(tx) {
-        return tx.symbol === t.symbol && 
-               tx.type === 'premium' && 
-               tx.premium_type === 'covered_call' &&
-               new Date(tx.date) <= new Date(t.date);
-      }).reduce(function(sum, tx) {
-        return sum + (tx.shares * tx.price);
-      }, 0);
-
-      const totalProceeds = proceeds + coveredCallPremiums;
-      const realizedGain = totalProceeds - costBasisForSale;
-      const gainPercent = costBasisForSale > 0 ? (realizedGain / costBasisForSale * 100).toFixed(2) : '0.00';
-      
-      const firstBuy = transactions.find(function(tx) {
-        return tx.symbol === t.symbol && tx.type === 'buy';
-      });
-      
-      soldData[saleKey] = {
-        symbol: t.symbol,
-        portfolio: t.portfolio,
-        sharesSold: t.shares,
-        avgBuyPrice: avgCostBasis,
-        avgSellPrice: t.price,
-        totalCost: costBasisForSale,
-        totalProceeds: totalProceeds,
-        realizedGain: realizedGain,
-        gainPercent: gainPercent,
-        firstBuy: firstBuy ? firstBuy.date : t.date,
-        lastSell: t.date,
-        isPartialSale: true
-      };
+      totalValue += data.shares * currentPrice;
+      totalCost += data.totalCost;
     }
   });
-
-  transactions.forEach(function(t) {
-    if (t.type === 'premium' && t.premium_type === 'csp_expired') {
-      const key = t.symbol + '_premium_' + t.date;
-      soldData[key] = {
-        portfolio: t.portfolio,
-        symbol: t.symbol,
-        sharesSold: t.shares,
-        avgBuyPrice: 0,
-        avgSellPrice: t.price,
-        totalCost: 0,
-        totalProceeds: t.shares * t.price,
-        realizedGain: t.shares * t.price,
-        gainPercent: t.price > 0 ? '100.00' : t.price < 0 ? '-100.00' : '0.00',
-        firstBuy: t.date,
-        lastSell: t.date,
-        isPremium: true,
-        premiumType: 'CSP Expired'
-      };
+  
+  unrealizedGain = totalValue - totalCost;
+  const unrealizedPercent = totalCost > 0 ? (unrealizedGain / totalCost) * 100 : 0;
+  
+  let realizedGain = 0;
+  transactions.forEach(t => {
+    if (t.type === 'dividend') realizedGain += t.price;
+    if (t.type === 'premium' && t.premium_type === 'csp_expired') realizedGain += t.price;
+  });
+  
+  // Calculate realized from sells
+  const sold = {};
+  transactions.forEach(t => {
+    const key = t.symbol;
+    if (!sold[key]) sold[key] = { buys: [], sells: [] };
+    if (t.type === 'buy') sold[key].buys.push(t);
+    if (t.type === 'sell') sold[key].sells.push(t);
+  });
+  
+  Object.values(sold).forEach(data => {
+    data.sells.forEach(sell => {
+      const relevantBuys = data.buys.filter(b => b.date <= sell.date);
+      if (relevantBuys.length > 0) {
+        const totalBuyCost = relevantBuys.reduce((sum, b) => sum + (b.quantity * b.price), 0);
+        const totalBuyQty = relevantBuys.reduce((sum, b) => sum + b.quantity, 0);
+        const avgBuyPrice = totalBuyCost / totalBuyQty;
+        const sellQty = Math.abs(sell.quantity);
+        realizedGain += (sell.price - avgBuyPrice) * sellQty;
+      }
+    });
+  });
+  
+  const realizedPercent = totalCost > 0 ? (realizedGain / totalCost) * 100 : 0;
+  
+  // Count holdings by portfolio
+  const holdingsByPortfolio = {};
+  portfolios.forEach(p => {
+    if (p.id !== 'total') {
+      const pHoldings = calculateHoldings(p.id);
+      holdingsByPortfolio[p.name] = Object.values(pHoldings).filter(h => h.shares > 0).length;
     }
   });
-
-  updateTables(symbolData, portfolioData, soldData);
-  const activeTab = document.querySelector('.tab.active');
-  const currentPortfolio = activeTab ? activeTab.dataset.tab : 'total';
-  const portfolioFilter = ['total', 'rm', 'sa', 'pro'].includes(currentPortfolio) ? currentPortfolio : 'total';
- 
-  updateSummary(symbolData, portfolioData, portfolioFilter, soldData);
-  updateCashFlowTable();
+  
+  const totalStocks = Object.values(holdings).filter(h => h.shares > 0).length;
+  const breakdownText = Object.entries(holdingsByPortfolio)
+    .map(([name, count]) => `${name}: ${count}`)
+    .join(' | ');
+  
+  document.getElementById('totalValue').textContent = `$${totalValue.toFixed(2)}`;
+  document.getElementById('totalCost').textContent = `$${totalCost.toFixed(2)}`;
+  document.getElementById('totalGainLoss').textContent = `$${unrealizedGain.toFixed(2)}`;
+  document.getElementById('totalGainLossPercent').textContent = `${unrealizedPercent.toFixed(2)}%`;
+  document.getElementById('totalGainLossPercent').className = unrealizedPercent >= 0 ? 'change positive' : 'change negative';
+  document.getElementById('realizedGainLoss').textContent = `$${realizedGain.toFixed(2)}`;
+  document.getElementById('realizedGainPercent').textContent = `${realizedPercent.toFixed(2)}%`;
+  document.getElementById('realizedGainPercent').className = realizedPercent >= 0 ? 'change positive' : 'change negative';
+  document.getElementById('stockCount').textContent = `${totalStocks} Total`;
+  document.getElementById('holdingsBreakdown').textContent = breakdownText;
+  
+  // XIRR and Days Held
+  const xirr = calculateXIRR();
+  document.getElementById('portfolioXIRR').textContent = `${xirr.toFixed(2)}%`;
+  
+  const daysHeld = calculateWeightedAvgDaysHeld();
+  document.getElementById('weightedDaysHeld').textContent = `${daysHeld} days`;
 }
 
-function updateTables(symbolData, portfolioData, soldData) {
-  const tables = {
-    total: document.getElementById('totalTable'),
-    rm: document.getElementById('rmTable'),
-    sa: document.getElementById('saTable'),
-    pro: document.getElementById('proTable'),
-    all: document.getElementById('allTable'),
-    sold: document.getElementById('soldTable')
-  };
-  
-  for (const portfolio in tables) {
-    const table = tables[portfolio];
-    if (!table) continue;
-    const tbody = table.querySelector('tbody');
-    if (!tbody) continue;
-    tbody.innerHTML = '';
-    
-    if (portfolio === 'all') {
-      transactions.forEach(function(t) {
-        const row = document.createElement('tr');
-        row.innerHTML = '<td><input type="checkbox" class="select-row"></td><td>' + t.type + '</td><td>' + t.portfolio + '</td><td>' + t.symbol + '</td><td>' + t.shares.toFixed(2) + '</td><td>$' + t.price.toFixed(2) + '</td><td>' + formatDateDDMMYYYY(t.date) + '</td>';
-        tbody.appendChild(row);
-      });
-    } else if (portfolio === 'sold') {
-      for (const key in soldData) {
-        const data = soldData[key];
-        const symbol = data.symbol || key;
-        const row = document.createElement('tr');
-        
-        const firstBuyDate = new Date(data.firstBuy);
-        const lastSellDate = new Date(data.lastSell);
-        const daysHeld = Math.ceil((lastSellDate - firstBuyDate) / (1000 * 60 * 60 * 24));
-        
-        const dates = [new Date(data.firstBuy), new Date(data.lastSell)];
-        const values = [-data.totalCost, data.totalProceeds];
-
-        const xirr = calculateXIRR(dates, values);
-        
-        const currentPrice = livePrices[symbol] || 0;
-        
-const unrealizedGain = data.isPremium ? null : (currentPrice > 0 ? ((currentPrice - data.avgBuyPrice) * data.sharesSold) - data.realizedGain : 0);
-        
-        row.innerHTML = '<td><input type="checkbox" class="select-row"></td>' +
-          '<td>' + symbol + (data.isPremium ? ' (Premium)' : '') + '</td>' +
-          '<td>' + data.portfolio.toUpperCase() + '</td>' +
-          '<td>' + data.sharesSold.toFixed(2) + '</td>' +
-          '<td>$' + data.avgBuyPrice.toFixed(2) + '</td>' +
-          '<td>$' + data.avgSellPrice.toFixed(2) + '</td>' +
-          '<td>$' + (currentPrice || 0).toFixed(2) + '</td>' +
-          '<td class="' + (data.realizedGain < 0 ? 'negative' : 'positive') + '">$' + data.realizedGain.toFixed(2) + '</td>' +
-          '<td class="' + (data.gainPercent < 0 ? 'negative' : 'positive') + '">' + data.gainPercent + '%</td>' +
-          '<td>' + daysHeld + '</td>' +
-          '<td>' + (daysHeld < 90 ? 'N/A' : (xirr * 100).toFixed(2) + '%') + '</td>' +
-'<td>' + (unrealizedGain === null ? 'N/A' : '<span class="' + (unrealizedGain < 0 ? 'positive' : 'negative') + '">$' + unrealizedGain.toFixed(2) + '</span>') + '</td>';
-        tbody.appendChild(row);
-      }
-    } else {
-      for (const symbol in symbolData) {
-        const data = symbolData[symbol];
-        if (!data.netShares || data.netShares <= 0.001) continue;
-        if (portfolio !== 'total' && data.portfolio !== portfolio) continue;
-
-        const row = document.createElement('tr');
-        let portfolioTotalValue = portfolioData.totalValue;
-
-        if (portfolio !== 'total') {
-          portfolioTotalValue = 0;
-          for (const sym in symbolData) {
-            const d = symbolData[sym];
-            if (d.portfolio === portfolio && d.netShares > 0) {
-              portfolioTotalValue += d.currentValue;
-            }
-          }
-        }
-
-        var portfolioPercent = (portfolioTotalValue > 0) ? (data.currentValue / portfolioTotalValue * 100).toFixed(2) : '0.00';
-        row.innerHTML = '<td><input type="checkbox" class="select-row"></td><td>' + symbol + '</td><td>' + (data.netShares || 0).toFixed(2) + '</td><td>$' + (data.avgCost || 0).toFixed(2) + '</td><td>$' + (data.currentPrice || 0).toFixed(2) + '</td><td>$' + (data.totalCost || 0).toFixed(2) + '</td><td>$' + (data.currentValue || 0).toFixed(2) + '</td><td>' + portfolioPercent + '%</td><td class="' + (data.gainLoss < 0 ? 'negative' : '') + '">$' + (data.gainLoss || 0).toFixed(2) + '</td><td class="' + ((data.gainLossPercent || 0) < 0 ? 'negative' : '') + '">' + (data.gainLossPercent || 0) + '%</td><td>' + (data.weightedDays < 90 ? 'N/A' : ((data.xirr || 0) * 100).toFixed(2) + '%') + '</td><td>' + Math.round(data.weightedDays || 0) + ' days</td><td>' + formatDateDDMMYYYY(data.firstDate) + '</td><td>' + formatDateDDMMYYYY(data.lastDate) + '</td>';
-        tbody.appendChild(row);
-      }
-    }
-  }
-
-  for (const portfolio in sortState) {
-    const state = sortState[portfolio];
-    const table = tables[portfolio];
-    if (table) sortTable(table, state.column, state.direction);
-  }
+function calculateXIRR() {
+  // Simplified XIRR calculation
+  return 0; // Placeholder
 }
 
-function updateSummary(symbolData, portfolioData, currentPortfolio, soldData) {
-  currentPortfolio = currentPortfolio || 'total';
-  
-  if (currentPortfolio === 'sold') {
-    let totalRealizedGain = 0;
-    let rmRealizedGain = 0;
-    let saRealizedGain = 0;
-    let proRealizedGain = 0;
-    
-    for (const key in soldData) {
-      const data = soldData[key];
-      totalRealizedGain += data.realizedGain;
-      
-      if (data.portfolio === 'rm') rmRealizedGain += data.realizedGain;
-      else if (data.portfolio === 'sa') saRealizedGain += data.realizedGain;
-      else if (data.portfolio === 'pro') proRealizedGain += data.realizedGain;
-    }
-    
-    document.getElementById('totalValue').textContent = '$' + totalRealizedGain.toFixed(2);
-    document.getElementById('totalCost').textContent = 'Total Realized Gain';
-    
-    document.getElementById('realizedGainLoss').textContent = '$' + rmRealizedGain.toFixed(2);
-    document.getElementById('realizedGainPercent').textContent = 'RM Portfolio';
-    
-    document.getElementById('totalGainLoss').textContent = '$' + saRealizedGain.toFixed(2);
-    document.getElementById('totalGainLossPercent').textContent = 'SA Portfolio';
-    
-    document.getElementById('stockCount').textContent = '$' + proRealizedGain.toFixed(2);
-    document.getElementById('holdingsBreakdown').textContent = 'PRO Portfolio';
-    
-    document.getElementById('portfolioXIRR').closest('.summary-card').style.display = 'none';
-    document.getElementById('weightedDaysHeld').closest('.summary-card').style.display = 'none';
-    
-    return;
-  }
-  
-  document.getElementById('portfolioXIRR').closest('.summary-card').style.display = 'block';
-  document.getElementById('weightedDaysHeld').closest('.summary-card').style.display = 'block';
-  
-  let filteredSymbolData = symbolData;
-  let displayValue = portfolioData.totalValue;
-  let displayCost = portfolioData.totalCost;
-  let holdings = { rm: portfolioData.rm, sa: portfolioData.sa, pro: portfolioData.pro };
-  
-  let totalRealizedGain = 0;
-  let totalRealizedCost = 0;
-  
-  for (const key in soldData) {
-    const data = soldData[key];
-    if (currentPortfolio === 'total' || data.portfolio === currentPortfolio) {
-      totalRealizedGain += data.realizedGain;
-      totalRealizedCost += data.totalCost;
-    }
-  }
-  
-  if (currentPortfolio !== 'total') {
-    filteredSymbolData = {};
-    displayValue = 0;
-    displayCost = 0;
-    
-    for (const symbol in symbolData) {
-      if (symbolData[symbol].portfolio === currentPortfolio && symbolData[symbol].netShares > 0) {
-        filteredSymbolData[symbol] = symbolData[symbol];
-        displayValue += symbolData[symbol].currentValue;
-        displayCost += symbolData[symbol].totalCost;
-      }
-    }
-  }
-  
-  document.getElementById('totalValue').textContent = '$' + displayValue.toFixed(2);
-  document.getElementById('totalCost').textContent = '$' + displayCost.toFixed(2);
-
-  const totalGainLoss = displayValue - displayCost;
-  document.getElementById('totalGainLoss').textContent = '$' + totalGainLoss.toFixed(2);
-  document.getElementById('totalGainLossPercent').textContent = (displayCost ? (totalGainLoss / displayCost * 100).toFixed(2) : 0.00) + '%';
-  
-  document.getElementById('realizedGainLoss').textContent = '$' + totalRealizedGain.toFixed(2);
-  const realizedGainPercent = totalRealizedCost > 0 ? (totalRealizedGain / totalRealizedCost * 100).toFixed(2) : '0.00';
-  document.getElementById('realizedGainPercent').textContent = realizedGainPercent + '%';
-  
-  const totalHoldings = Object.values(filteredSymbolData).filter(function(d) {
-    return d.netShares > 0;
-  }).length;
-  
-  if (currentPortfolio === 'total') {
-    document.getElementById('stockCount').textContent = totalHoldings + ' Holdings';
-    document.getElementById('holdingsBreakdown').textContent = 'RM: ' + holdings.rm + ' | SA: ' + holdings.sa + ' | PRO: ' + holdings.pro;
-  } else {
-    document.getElementById('stockCount').textContent = totalHoldings + ' Holdings';
-    document.getElementById('holdingsBreakdown').textContent = currentPortfolio.toUpperCase() + ' Portfolio';
-  }
-  
-  const filteredTransactions = currentPortfolio === 'total' ? transactions : transactions.filter(function(t) {
-    return t.portfolio === currentPortfolio;
-  });
-  
-  const portfolioXIRR = calculatePortfolioXIRR(filteredTransactions, filteredSymbolData, livePrices);
-  document.getElementById('portfolioXIRR').textContent = (portfolioXIRR * 100).toFixed(2) + '%';
-
+function calculateWeightedAvgDaysHeld() {
   let totalWeightedDays = 0;
   let totalValue = 0;
-
-  for (const symbol in filteredSymbolData) {
-    const data = filteredSymbolData[symbol];
-    if (data.netShares > 0) {
-      totalWeightedDays += data.currentValue * data.weightedDays;
-      totalValue += data.currentValue;
-    }
-  }
-
-  const weightedDaysHeld = totalValue > 0 ? totalWeightedDays / totalValue : 0;
-  document.getElementById('weightedDaysHeld').textContent = Math.round(weightedDaysHeld) + ' days';
-}
-
-async function savePricesCache() {
-  for (const symbol in livePrices) {
-    if (livePrices[symbol] > 0) {
-      await supabase
-        .from('price_cache')
-        .upsert({ 
-          symbol: symbol, 
-          price: livePrices[symbol],
-          updated_at: new Date().toISOString()
-        }, { 
-          onConflict: 'symbol' 
-        });
-    }
-  }
-  console.log('Saved prices to Supabase');
-}
-
-async function fetchLivePrices(symbols) {
-  const apiKey = '7563c9356b204c13822aa6e22185302a';
-  let processed = 0;
-  console.log('Starting to fetch ' + symbols.length + ' prices...');
   
-  for (let i = 0; i < symbols.length; i++) {
-    const symbol = symbols[i];
-    try {
-      if (processed > 0 && processed % 8 === 0) {
-        console.log('Rate limit pause after ' + processed + ' requests...');
-        await new Promise(function(resolve) {
-          setTimeout(resolve, 62000);
-        });
+  const holdings = calculateHoldings('total');
+  const today = new Date();
+  
+  Object.entries(holdings).forEach(([symbol, data]) => {
+    if (data.shares > 0) {
+      const buys = transactions.filter(t => t.symbol === symbol && t.type === 'buy');
+      if (buys.length > 0) {
+        const avgBuyDate = new Date(buys.reduce((sum, b) => sum + new Date(b.date).getTime(), 0) / buys.length);
+        const daysHeld = Math.floor((today - avgBuyDate) / (1000 * 60 * 60 * 24));
+        const currentPrice = livePrices[symbol] || 0;
+        const value = data.shares * currentPrice;
+        
+        totalWeightedDays += daysHeld * value;
+        totalValue += value;
       }
-      
-      const proxyUrl = 'https://corsproxy.io/?';
-      const apiUrl = 'https://api.twelvedata.com/price?symbol=' + symbol + '&apikey=' + apiKey;
-      const response = await fetch(proxyUrl + encodeURIComponent(apiUrl));     
-      const data = await response.json();
-      
-      if (data.code === 429) {
-        console.log('Rate limited, waiting 62 seconds...');
-        await new Promise(function(resolve) {
-          setTimeout(resolve, 62000);
-        });
-        i--;
-        continue;
-      }
-      
-      livePrices[symbol] = data.price ? parseFloat(data.price) : 0;
-      processed++;
-      console.log('Fetched ' + processed + '/' + symbols.length + ': ' + symbol + ' = $' + livePrices[symbol]);
-      
-      await new Promise(function(resolve) {
-        setTimeout(resolve, 2000);
-      });
-    } catch (error) {
-      console.error('Error fetching ' + symbol + ':', error);
-      if (!livePrices[symbol]) {
-        livePrices[symbol] = 0;
-      }
-      processed++;
     }
-  }
-  
-  console.log('All prices fetched, saving cache...');
-  await savePricesCache();
-  console.log('Cache saved, returning...');
-}
-
-async function getLivePrice(symbol) {
-  if (livePrices[symbol]) return;
-  
-  try {
-    const proxyUrl = 'https://corsproxy.io/?';
-    const apiUrl = 'https://api.twelvedata.com/price?symbol=' + symbol + '&apikey=7563c9356b204c13822aa6e22185302a';
-    const response = await fetch(proxyUrl + encodeURIComponent(apiUrl));
-    const data = await response.json();
-    livePrices[symbol] = data.price ? parseFloat(data.price) : 0;
-    
-    await supabase
-      .from('price_cache')
-      .upsert({ 
-        symbol: symbol, 
-        price: livePrices[symbol],
-        updated_at: new Date().toISOString()
-      }, { 
-        onConflict: 'symbol' 
-      });
-    
-    refreshPricesAndNames();
-  } catch (error) {
-    console.error('Error fetching price for ' + symbol, error);
-    livePrices[symbol] = 0;
-    refreshPricesAndNames();
-  }
-}
-
-async function addCashFlow() {
-  const type = document.getElementById('cashFlowType').value;
-  const amount = parseFloat(document.getElementById('cashAmount').value);
-  const dateInput = document.getElementById('cashDate').value;
-  
-  if (!amount || amount <= 0 || !dateInput) {
-    alert('Please fill in amount and date');
-    return;
-  }
-  
-  const yearMatch = dateInput.match(/^(\d{4})-/);
-  if (!yearMatch || yearMatch[1].length !== 4) {
-    alert('Please enter a valid 4-digit year');
-    return;
-  }
-  
-  const date = dateInput + 'T00:00:00Z';
-  const cashFlow = { type: type, amount: amount, date: date };
-  
-  cashFlows.push(cashFlow);
-  const { error } = await supabase.from('cash_flows').insert([cashFlow]);
-
-  if (error) {
-    console.error('Error saving cash flow:', error);
-    alert('Error saving cash flow: ' + error.message);
-    return;
-  }  
-  
-  document.getElementById('cashAmount').value = '';
-  document.getElementById('cashDate').value = '';
-  
-  updateCashFlowTable();
-}
-
-function calculateCashFlowXIRR(cashFlows, currentPortfolioValue) {
-  if (cashFlows.length === 0) return 0;
-  
-  const dates = [];
-  const values = [];
-  
-  cashFlows.forEach(function(cf) {
-    const date = new Date(cf.date);
-    const amount = cf.type === 'deposit' ? -cf.amount : cf.amount;
-    dates.push(date);
-    values.push(amount);
   });
   
-  if (currentPortfolioValue > 0) {
-    dates.push(new Date());
-    values.push(currentPortfolioValue);
+  return totalValue > 0 ? Math.floor(totalWeightedDays / totalValue) : 0;
+}
+
+// ============ CASH FLOWS ============
+
+async function addCashFlow() {
+  const date = document.getElementById('cashFlowDate').value;
+  const type = document.getElementById('cashFlowType').value;
+  const amount = parseFloat(document.getElementById('cashFlowAmount').value);
+  const notes = document.getElementById('cashFlowNotes').value.trim();
+
+  if (!date || !type || isNaN(amount)) {
+    alert('Please fill in all required fields');
+    return;
   }
+
+  const cashFlow = {
+    id: Date.now(),
+    date,
+    type,
+    amount: type === 'withdrawal' ? -Math.abs(amount) : Math.abs(amount),
+    notes
+  };
+
+  cashFlows.push(cashFlow);
+  await saveDataToSupabase();
   
-  return calculateXIRR(dates, values);
+  document.getElementById('cashFlowDate').value = '';
+  document.getElementById('cashFlowType').value = '';
+  document.getElementById('cashFlowAmount').value = '';
+  document.getElementById('cashFlowNotes').value = '';
+  
+  updateCashFlowTable();
 }
 
 function updateCashFlowTable() {
-  const table = document.getElementById('cashFlowTable');
-  if (!table) return;
-  
-  const activeTab = document.querySelector('.tab.active');
-  const isCashFlowTab = activeTab && activeTab.dataset.tab === 'cashflow';
-  
-  const regularCards = [
-    document.getElementById('totalValue'),
-    document.getElementById('totalCost'),
-    document.getElementById('realizedGainLoss'),
-    document.getElementById('totalGainLoss'),
-    document.getElementById('stockCount'),
-    document.getElementById('portfolioXIRR'),
-    document.getElementById('weightedDaysHeld')
-  ];
-  
-  regularCards.forEach(function(el) {
-    if (el && el.closest('.summary-card')) {
-      el.closest('.summary-card').style.display = isCashFlowTab ? 'none' : 'block';
-    }
-  });
-  
-  for (let i = 1; i <= 5; i++) {
-    const card = document.getElementById('cashFlowCard' + i);
-    if (card) {
-      card.style.display = isCashFlowTab ? 'block' : 'none';
-    }
-  }
-  
-  const tbody = table.querySelector('tbody');
-  if (!tbody) return;
+  const tbody = document.getElementById('cashFlowsBody');
   tbody.innerHTML = '';
+
+  const sortedFlows = [...cashFlows].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  sortedFlows.forEach(flow => {
+    const row = tbody.insertRow();
+    row.innerHTML = `
+      <td><input type="checkbox" data-id="${flow.id}"></td>
+      <td>${flow.date}</td>
+      <td>${flow.type}</td>
+      <td class="${flow.amount >= 0 ? 'positive' : 'negative'}">$${flow.amount.toFixed(2)}</td>
+      <td>${flow.notes || ''}</td>
+    `;
+  });
+
+  // Update summary
+  const totalInput = cashFlows.reduce((sum, f) => sum + (f.amount > 0 ? f.amount : 0), 0);
+  const totalWithdrawal = cashFlows.reduce((sum, f) => sum + (f.amount < 0 ? Math.abs(f.amount) : 0), 0);
+  const netCash = totalInput - totalWithdrawal;
   
-  let totalCashInput = 0;
-  let totalWeightedDays = 0;
-  
-  cashFlows.forEach(function(cf) {
-    const row = document.createElement('tr');
-    const displayType = cf.type.toUpperCase();
-    const daysHeld = calculateDaysHeld(cf.date);
-    
-    row.innerHTML = '<td><input type="checkbox" class="select-row"></td>' +
-      '<td>' + displayType + '</td>' +
-      '<td>$' + cf.amount.toFixed(2) + '</td>' +
-      '<td>' + formatDateDDMMYYYY(cf.date) + '</td>' +
-      '<td>' + daysHeld + ' days</td>';
-    tbody.appendChild(row);
-    
-    if (cf.type === 'deposit') {
-      totalCashInput += cf.amount;
-      totalWeightedDays += cf.amount * daysHeld;
-    } else {
-      totalCashInput -= cf.amount;
+  const holdings = calculateHoldings('total');
+  let portfolioValue = 0;
+  Object.entries(holdings).forEach(([symbol, data]) => {
+    if (data.shares > 0) {
+      portfolioValue += data.shares * (livePrices[symbol] || 0);
     }
   });
   
-  const portfolioValueText = document.getElementById('totalValue');
-  if (!portfolioValueText) return;
+  const cashGain = portfolioValue - netCash;
+  const cashGainPercent = netCash > 0 ? (cashGain / netCash) * 100 : 0;
   
-  const currentPortfolioValue = parseFloat(portfolioValueText.textContent.replace('$', '').replace(/,/g, '')) || 0;
-  
-  const cashFlowXIRR = calculateCashFlowXIRR(cashFlows, currentPortfolioValue);
-  const cashFlowGainLoss = currentPortfolioValue - totalCashInput;
-  const cashFlowGainPercent = totalCashInput > 0 ? (cashFlowGainLoss / totalCashInput * 100) : 0;
-  const weightedAvgDays = totalCashInput > 0 ? Math.round(totalWeightedDays / totalCashInput) : 0;
-  
-  const totalCashInputEl = document.getElementById('totalCashInput');
-  const cashFlowPortfolioValueEl = document.getElementById('cashFlowPortfolioValue');
-  const cashFlowXIRREl = document.getElementById('cashFlowXIRR');
-  const cashFlowWeightedDaysEl = document.getElementById('cashFlowWeightedDays');
-  const cashFlowGainLossEl = document.getElementById('cashFlowGainLoss');
-  const cashFlowGainPercentEl = document.getElementById('cashFlowGainPercent');
-  
-  if (totalCashInputEl) totalCashInputEl.textContent = '$' + totalCashInput.toFixed(2);
-  if (cashFlowPortfolioValueEl) cashFlowPortfolioValueEl.textContent = '$' + currentPortfolioValue.toFixed(2);
-  if (cashFlowXIRREl) cashFlowXIRREl.textContent = (cashFlowXIRR * 100).toFixed(2) + '%';
-  if (cashFlowWeightedDaysEl) cashFlowWeightedDaysEl.textContent = weightedAvgDays + ' days';
-  
-  if (cashFlowGainLossEl) {
-    cashFlowGainLossEl.textContent = '$' + cashFlowGainLoss.toFixed(2);
-    cashFlowGainLossEl.className = 'value ' + (cashFlowGainLoss < 0 ? 'negative' : 'positive');
-  }
-  
-  if (cashFlowGainPercentEl) {
-    cashFlowGainPercentEl.textContent = cashFlowGainPercent.toFixed(2) + '%';
-  }
+  document.getElementById('totalCashInput').textContent = `$${netCash.toFixed(2)}`;
+  document.getElementById('cashFlowPortfolioValue').textContent = `$${portfolioValue.toFixed(2)}`;
+  document.getElementById('cashFlowGainLoss').textContent = `$${cashGain.toFixed(2)}`;
+  document.getElementById('cashFlowGainPercent').textContent = `${cashGainPercent.toFixed(2)}%`;
+  document.getElementById('cashFlowGainPercent').className = cashGainPercent >= 0 ? 'change positive' : 'change negative';
 }
 
 async function deleteCashFlowSelected() {
-  const table = document.getElementById('cashFlowTable');
-  if (!table) return;
-  
-  const checkboxes = table.querySelectorAll('tbody .select-row:checked');
-  
+  const checkboxes = document.querySelectorAll('#cashFlowsBody input[type="checkbox"]:checked');
   if (checkboxes.length === 0) {
     alert('Please select cash flows to delete');
     return;
   }
-  
-  if (!confirm('Are you sure you want to delete ' + checkboxes.length + ' selected cash flow(s)?')) {
+
+  if (!confirm(`Delete ${checkboxes.length} selected cash flow(s)?`)) {
     return;
   }
+
+  const idsToDelete = Array.from(checkboxes).map(cb => parseInt(cb.dataset.id));
+  cashFlows = cashFlows.filter(f => !idsToDelete.includes(f.id));
   
-  const cashFlowsToDelete = [];
-  checkboxes.forEach(function(checkbox) {
-    const row = checkbox.closest('tr');
-    const cells = row.cells;
-    
-    const type = cells[1].textContent.toLowerCase();
-    const amount = parseFloat(cells[2].textContent.replace('$', '').replace(/,/g, ''));
-    const date = cells[3].textContent;
-    
-    cashFlowsToDelete.push({ type, amount, date });
-  });
-  
-  for (const cf of cashFlowsToDelete) {
-    const dateParts = cf.date.split('/');
-    const isoDate = dateParts[2] + '-' + dateParts[1] + '-' + dateParts[0] + 'T00:00:00Z';
-    
-    await supabase
-      .from('cash_flows')
-      .delete()
-      .match({
-        type: cf.type,
-        amount: cf.amount,
-        date: isoDate
-      });
-  }
-  
-  cashFlowsToDelete.forEach(function(cfToDelete) {
-    const index = cashFlows.findIndex(function(cf) {
-      return cf.type === cfToDelete.type && 
-             cf.amount === cfToDelete.amount &&
-             formatDateDDMMYYYY(cf.date) === cfToDelete.date;
-    });
-    if (index !== -1) {
-      cashFlows.splice(index, 1);
-    }
-  });
-  
+  await saveDataToSupabase();
   updateCashFlowTable();
 }
 
-async function loadDataFromSupabase() {
-  try {
-    const { data: txns, error: txnError } = await supabase
-      .from('transactions')
-      .select('*')
-      .order('date', { ascending: true });
-    
-    if (!txnError && txns) {
-      transactions = txns.map(t => ({
-        type: t.type,
-        portfolio: t.portfolio,
-        symbol: t.symbol,
-        shares: parseFloat(t.shares),
-        price: parseFloat(t.price),
-        date: t.date,
-        premium_type: t.premium_type || null
-      }));
-      console.log('Loaded ' + transactions.length + ' transactions from Supabase');
-    }
-    
-    const { data: flows, error: flowError } = await supabase
-      .from('cash_flows')
-      .select('*')
-      .order('date', { ascending: true });
-    
-    if (!flowError && flows) {
-      cashFlows = flows.map(cf => ({
-        type: cf.type,
-        amount: parseFloat(cf.amount),
-        date: cf.date
-      }));
-      console.log('Loaded ' + cashFlows.length + ' cash flows from Supabase');
-    }
-    
-    const { data: prices, error: priceError } = await supabase
-      .from('price_cache')
-      .select('*');
-    
-    if (!priceError && prices) {
-      prices.forEach(p => {
-        livePrices[p.symbol] = parseFloat(p.price);
-      });
-      console.log('Loaded ' + Object.keys(livePrices).length + ' cached prices from Supabase');
-    }
-  } catch (error) {
-    console.error('Error loading data from Supabase:', error);
+// ============ PRICE FETCHING ============
+
+function shouldFetchNewPrices() {
+  const lastFetch = localStorage.getItem('lastPriceFetch');
+  const cachedPrices = localStorage.getItem('cachedLivePrices');
+  
+  if (!lastFetch || !cachedPrices) return true;
+  
+  const timeSinceLastFetch = Date.now() - parseInt(lastFetch);
+  return timeSinceLastFetch > CACHE_DURATION;
+}
+
+function loadCachedPrices() {
+  const cached = localStorage.getItem('cachedLivePrices');
+  if (cached) {
+    livePrices = JSON.parse(cached);
+    return true;
   }
+  return false;
+}
+
+function savePricesCache() {
+  localStorage.setItem('cachedLivePrices', JSON.stringify(livePrices));
+  localStorage.setItem('lastPriceFetch', Date.now().toString());
+}
+
+async function fetchLivePrices(symbols) {
+  const apiKey = localStorage.getItem('apiKey');
+  if (!apiKey) {
+    console.error('No API key found');
+    return;
+  }
+
+  console.log(`Starting to fetch ${symbols.length} prices...`);
+  
+  const RATE_LIMIT = 8;
+  const RATE_WINDOW = 60000;
+
+  for (let i = 0; i < symbols.length; i += RATE_LIMIT) {
+    const batch = symbols.slice(i, i + RATE_LIMIT);
+    
+    await Promise.all(batch.map(async symbol => {
+      try {
+        const response = await fetch(`https://api.twelvedata.com/price?symbol=${symbol}&apikey=${apiKey}`);
+        const data = await response.json();
+        
+        if (data.price) {
+          livePrices[symbol] = parseFloat(data.price);
+        }
+      } catch (error) {
+        console.error(`Error fetching ${symbol}:`, error);
+      }
+    }));
+    
+    if (i + RATE_LIMIT < symbols.length) {
+      console.log(`Fetched ${Math.min(i + RATE_LIMIT, symbols.length)}/${symbols.length}, waiting 60s...`);
+      await new Promise(resolve => setTimeout(resolve, RATE_WINDOW));
+    }
+  }
+  
+  console.log('All prices fetched, saving cache...');
+  savePricesCache();
+}
+
+async function refreshPricesAndNames() {
+  const symbolData = {};
+  
+  transactions.forEach(t => {
+    if (!symbolData[t.symbol]) {
+      symbolData[t.symbol] = { symbol: t.symbol };
+    }
+  });
+
+  const symbols = Object.keys(symbolData);
+
+  if (symbols.length === 0) {
+    updateTransactionsTable();
+    updatePortfolioTable('total', 'totalPortfolioBody');
+    portfolios.filter(p => p.id !== 'total').forEach(p => {
+      updatePortfolioTable(p.id, `${p.id}Body`);
+    });
+    updateSoldPositions();
+    updateSummary();
+    updateCashFlowTable();
+    return;
+  }
+
+  console.log('Cache expired, fetching fresh prices for', symbols.length, 'symbols');
+
+  if (shouldFetchNewPrices()) {
+    await fetchLivePrices(symbols);
+  } else {
+    loadCachedPrices();
+  }
+
+  console.log('Price fetch complete, refreshing display');
+  
+  updateTransactionsTable();
+  updatePortfolioTable('total', 'totalPortfolioBody');
+  portfolios.filter(p => p.id !== 'total').forEach(p => {
+    updatePortfolioTable(p.id, `${p.id}Body`);
+  });
+  updateSoldPositions();
+  updateSummary();
+  updateCashFlowTable();
 }
 
 async function refreshAllPrices() {
-  if (!confirm('This will fetch fresh prices for all stocks. It may take 7-8 minutes due to API rate limits. Continue?')) {
+  const symbols = [...new Set(transactions.map(t => t.symbol))];
+  
+  if (symbols.length === 0) {
+    alert('No transactions to refresh prices for');
     return;
   }
   
-  const symbols = [...new Set(transactions.map(t => t.symbol))];
-  console.log('Refreshing prices for ' + symbols.length + ' symbols...');
+  const estimatedMinutes = Math.ceil(symbols.length / 8);
+  if (!confirm(`This will fetch ${symbols.length} prices and may take ${estimatedMinutes} minutes due to API rate limits. Continue?`)) {
+    return;
+  }
+  
+  console.log('Refreshing prices for', symbols.length, 'symbols...');
   
   livePrices = {};
-  
   await fetchLivePrices(symbols);
-  
   refreshPricesAndNames();
   
   alert('Prices refreshed successfully!');
 }
 
+// ============ CSV IMPORT ============
+
+async function handleCsvImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const data = new Uint8Array(e.target.result);
+    const workbook = XLSX.read(data, { type: 'array' });
+    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+    const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+
+    jsonData.forEach(row => {
+      const transaction = {
+        id: Date.now() + Math.random(),
+        date: row.Date || row.date,
+        symbol: (row.Symbol || row.symbol || '').toUpperCase().trim(),
+        portfolio: row.Portfolio || row.portfolio || '',
+        type: (row.Type || row.type || '').toLowerCase(),
+        quantity: parseFloat(row.Quantity || row.quantity || 0),
+        price: parseFloat(row.Price || row.price || 0),
+        notes: row.Notes || row.notes || '',
+        premium_type: row.PremiumType || row.premium_type || null
+      };
+
+      if (transaction.symbol && transaction.date && transaction.type) {
+        transactions.push(transaction);
+      }
+    });
+
+    await saveDataToSupabase();
+    refreshPricesAndNames();
+    alert(`Imported ${jsonData.length} transactions`);
+  };
+  
+  reader.readAsArrayBuffer(file);
+  event.target.value = '';
+}
+
+// ============ SEARCH & SORT ============
+
+function searchTicker() {
+  const query = document.getElementById('tickerSearch').value.toUpperCase().trim();
+  if (!query) return;
+
+  const rows = document.querySelectorAll('#transactionsBody tr');
+  rows.forEach(row => {
+    const symbol = row.cells[2].textContent.trim();
+    row.style.display = symbol.includes(query) ? '' : 'none';
+  });
+}
+
+function clearTickerSearch() {
+  document.getElementById('tickerSearch').value = '';
+  document.querySelectorAll('#transactionsBody tr').forEach(row => {
+    row.style.display = '';
+  });
+}
+
+function initializeSortListeners() {
+  document.querySelectorAll('.sortable').forEach(th => {
+    th.addEventListener('click', function() {
+      const column = this.dataset.sort;
+      
+      if (sortConfig.column === column) {
+        sortConfig.direction = sortConfig.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortConfig.column = column;
+        sortConfig.direction = 'asc';
+      }
+      
+      document.querySelectorAll('.sortable').forEach(t => {
+        t.classList.remove('sort-asc', 'sort-desc');
+      });
+      
+      this.classList.add(`sort-${sortConfig.direction}`);
+      updateTransactionsTable();
+    });
+  });
+}
+
+function updateSelectAllCheckbox() {
+  const selectAll = document.getElementById('selectAll');
+  const checkboxes = document.querySelectorAll('#transactionsBody input[type="checkbox"]');
+  const checked = document.querySelectorAll('#transactionsBody input[type="checkbox"]:checked');
+  
+  selectAll.checked = checkboxes.length > 0 && checkboxes.length === checked.length;
+}
+
+// ============ MODAL HANDLERS ============
+
+document.getElementById('closeWelcomeBtn').addEventListener('click', function() {
+  document.getElementById('welcomeModal').classList.remove('active');
+  checkApiKey();
+});
+
+document.getElementById('settingsBtn').addEventListener('click', function() {
+  loadApiKey();
+  document.getElementById('settingsModal').classList.add('active');
+});
+
+document.getElementById('helpBtn').addEventListener('click', function() {
+  document.getElementById('welcomeModal').classList.add('active');
+});
+
+document.querySelector('#settingsModal .close').addEventListener('click', function() {
+  document.getElementById('settingsModal').classList.remove('active');
+});
+
+document.getElementById('saveApiKeyBtn').addEventListener('click', saveApiKey);
+document.getElementById('addPortfolioBtn').addEventListener('click', addPortfolio);
+
+// Close modals on outside click
+window.addEventListener('click', function(event) {
+  if (event.target.classList.contains('modal')) {
+    event.target.classList.remove('active');
+  }
+});
+
+// ============ EVENT LISTENERS ============
+
+document.getElementById('addTransactionBtn').addEventListener('click', addTransaction);
+document.getElementById('addCashFlowBtn').addEventListener('click', addCashFlow);
+document.getElementById('deleteSelected').addEventListener('click', confirmDeleteSelected);
+document.getElementById('deleteCashFlowSelected').addEventListener('click', deleteCashFlowSelected);
+document.getElementById('importCsvBtn').addEventListener('click', () => document.getElementById('csvFileInput').click());
+document.getElementById('csvFileInput').addEventListener('change', handleCsvImport);
+document.getElementById('searchTickerBtn').addEventListener('click', searchTicker);
+document.getElementById('clearTickerBtn').addEventListener('click', clearTickerSearch);
+document.getElementById('refreshPricesBtn').addEventListener('click', refreshAllPrices);
+
+document.getElementById('type').addEventListener('change', function() {
+  const premiumTypeSelect = document.getElementById('premiumType');
+  premiumTypeSelect.style.display = this.value === 'premium' ? 'inline-block' : 'none';
+});
+
+document.getElementById('selectAll').addEventListener('change', function() {
+  document.querySelectorAll('#transactionsBody input[type="checkbox"]').forEach(cb => {
+    cb.checked = this.checked;
+  });
+});
+
+document.getElementById('selectAllCashFlows').addEventListener('change', function() {
+  document.querySelectorAll('#cashFlowsBody input[type="checkbox"]').forEach(cb => {
+    cb.checked = this.checked;
+  });
+});
+
+// ============ INITIALIZATION ============
+
 async function init() {
+  checkFirstVisit();
   initializeTabs();
   initializeSortListeners();
+  initializePortfolios();
   
   await loadDataFromSupabase();
   
-  document.getElementById('addCashFlowBtn').addEventListener('click', addCashFlow);
-  document.getElementById('addTransactionBtn').addEventListener('click', addTransaction);
-  document.getElementById('clearDataBtn').addEventListener('click', confirmClearData);
-  document.getElementById('deleteSelected').addEventListener('click', confirmDeleteSelected);
-  document.getElementById('importCsvBtn').addEventListener('click', function() {
-    document.getElementById('csvFileInput').click();
-  });
-  document.getElementById('exportCsvBtn').addEventListener('click', exportTransactionsToCSV);
-  document.getElementById('csvFileInput').addEventListener('change', handleCsvImport);
-  document.getElementById('searchTickerBtn').addEventListener('click', searchTicker);
-  document.getElementById('clearTickerBtn').addEventListener('click', clearTickerSearch);
-  document.getElementById('deleteCashFlowSelected').addEventListener('click', deleteCashFlowSelected);
-  document.getElementById('refreshPricesBtn').addEventListener('click', refreshAllPrices);
+  const symbols = [...new Set(transactions.map(t => t.symbol))];
   
-  document.getElementById('type').addEventListener('change', function() {
-    const premiumTypeSelect = document.getElementById('premiumType');
-    if (this.value === 'premium') {
-      premiumTypeSelect.style.display = 'inline-block';
+  if (symbols.length > 0) {
+    if (shouldFetchNewPrices()) {
+      console.log('Fetching prices for', symbols.length, 'symbols');
+      await fetchLivePrices(symbols);
     } else {
-      premiumTypeSelect.style.display = 'none';
+      loadCachedPrices();
     }
-  });
-  
-  const symbols = [];
-  const seen = {};
-  transactions.forEach(function(t) {
-    if (!seen[t.symbol]) {
-      symbols.push(t.symbol);
-      seen[t.symbol] = true;
-    }
-  });
-  
-  refreshPricesAndNames();
-  
-  if (symbols.length > 0 && Object.keys(livePrices).length === 0) {
-    console.log('Fetching prices for ' + symbols.length + ' symbols');
-    await fetchLivePrices(symbols);
-    console.log('Price fetch complete, refreshing display');
-    refreshPricesAndNames();
   }
   
-  updateCashFlowTable();
+  refreshPricesAndNames();
 }
 
 init();
