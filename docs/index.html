@@ -18,7 +18,7 @@
           <li><strong>Get Your API Key:</strong> Sign up for free at <a href="https://twelvedata.com/" target="_blank">Twelve Data</a> to get your API key</li>
           <li><strong>Enter API Key:</strong> Click the Settings (⚙️) button and enter your API key</li>
           <li><strong>Add Transactions:</strong> Use the form to add your stock purchases, sales, and dividends</li>
-          <li><strong>Create Portfolios:</strong> Organize stocks into custom portfolios (e.g., "Long Term", "Day Trading", "IRA")</li>
+          <li><strong>Create Portfolios:</strong> Organize stocks into custom portfolios (e.g., "RM", "SA", "PRO")</li>
           <li><strong>Track Performance:</strong> View real-time prices, gains/losses, and XIRR calculations</li>
         </ol>
       </div>
@@ -29,7 +29,7 @@
           <li><strong>Multiple Portfolios:</strong> Create up to 5 custom portfolios with your own names</li>
           <li><strong>Transaction Types:</strong> Buy, Sell, Dividend, and Options Premium tracking</li>
           <li><strong>Real-time Pricing:</strong> Automatic price updates from market data</li>
-          <li><strong>CSV Import:</strong> Bulk import transactions from Excel/CSV files</li>
+          <li><strong>CSV Import/Export:</strong> Bulk import and backup your transactions</li>
           <li><strong>Performance Metrics:</strong> XIRR, gain/loss tracking, weighted avg days held</li>
           <li><strong>Options Trading:</strong> Track covered calls, CSP assigned, and CSP expired</li>
         </ul>
@@ -48,6 +48,7 @@
           <li>Your data is stored securely in Supabase cloud database</li>
           <li>Free Twelve Data plan allows 800 API calls per day (8 per minute)</li>
           <li>Prices are cached for 4 hours to conserve API usage</li>
+          <li><strong>Indian Stocks:</strong> Use format like RELIANCE.NSE or TCS.BSE</li>
         </ul>
       </div>
 
@@ -89,6 +90,14 @@
       </div>
 
       <div class="portfolio-summary">
+        <div class="summary-card" style="background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);">
+          <h3>💾 Data Safety</h3>
+          <div style="font-size: 0.85em; color: #155724; line-height: 1.5;">
+            ✅ Auto-saved to Supabase<br>
+            💡 Export CSV for backup
+          </div>
+        </div>
+        
         <div class="summary-card">
           <h3>Total Value</h3>
           <div class="value" id="totalValue">$0.00</div>
@@ -170,13 +179,13 @@
           </select>
           <input type="number" id="quantity" placeholder="Quantity" step="any">
           <input type="number" id="price" placeholder="Price" step="0.01" required>
-          <input type="text" id="notes" placeholder="Notes (optional)">
           <button id="addTransactionBtn" class="btn-primary">Add Transaction</button>
         </div>
 
         <div class="table-controls">
           <button id="importCsvBtn" class="btn-secondary">📥 Import CSV</button>
           <input type="file" id="csvFileInput" accept=".csv,.xlsx" style="display: none;">
+          <button id="exportCsvBtn" class="btn-secondary">📤 Export CSV</button>
           <button id="deleteSelected" class="btn-danger">🗑️ Delete Selected</button>
           <button id="refreshPricesBtn" class="btn-secondary">🔄 Refresh Prices</button>
           <div class="search-box">
@@ -193,14 +202,12 @@
                 <th><input type="checkbox" id="selectAll"></th>
                 <th class="sortable" data-sort="date">Date <span class="sort-icon">↕</span></th>
                 <th class="sortable" data-sort="symbol">Ticker <span class="sort-icon">↕</span></th>
-                <th>Company</th>
                 <th>Portfolio</th>
                 <th class="sortable" data-sort="type">Type <span class="sort-icon">↕</span></th>
                 <th class="sortable" data-sort="quantity">Quantity <span class="sort-icon">↕</span></th>
                 <th class="sortable" data-sort="price">Price <span class="sort-icon">↕</span></th>
                 <th>Total</th>
                 <th>Current Price</th>
-                <th>Notes</th>
               </tr>
             </thead>
             <tbody id="transactionsBody"></tbody>
@@ -215,7 +222,6 @@
             <thead>
               <tr>
                 <th>Ticker</th>
-                <th>Company</th>
                 <th>Shares</th>
                 <th>Avg Cost</th>
                 <th>Current Price</th>
@@ -239,7 +245,6 @@
             <thead>
               <tr>
                 <th>Ticker</th>
-                <th>Company</th>
                 <th>Portfolio</th>
                 <th>Buy Date</th>
                 <th>Sell Date</th>
@@ -268,7 +273,6 @@
             <option value="withdrawal">Withdrawal</option>
           </select>
           <input type="number" id="cashFlowAmount" placeholder="Amount" step="0.01" required>
-          <input type="text" id="cashFlowNotes" placeholder="Notes (optional)">
           <button id="addCashFlowBtn" class="btn-primary">Add Cash Flow</button>
         </div>
 
@@ -284,7 +288,6 @@
                 <th>Date</th>
                 <th>Type</th>
                 <th>Amount</th>
-                <th>Notes</th>
               </tr>
             </thead>
             <tbody id="cashFlowsBody"></tbody>
