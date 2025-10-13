@@ -6,10 +6,11 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);  /* Purple gradient! */
   min-height: 100vh;
   padding: 20px;
 }
+
 
 /* ============ MODAL STYLES ============ */
 
@@ -309,8 +310,9 @@ body {
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: 20px;
-  max-width: 1600px;
+  max-width: 90%
   margin: 0 auto;
+  padding: 20px;
 }
 
 /* ============ SIDEBAR ============ */
@@ -399,7 +401,20 @@ body {
   border-radius: 15px;
   padding: 25px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  max-height: calc(100vh - 80px);  /* Full height minus top/bottom margins */
+  display: flex;
+  flex-direction: column;
 }
+
+.table-container {
+  overflow-x: auto;
+  overflow-y: auto;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  max-height: calc(100vh - 400px);  /* Scrollable table */
+  flex: 1;
+}
+
 
 /* ============ TABS ============ */
 
@@ -492,12 +507,20 @@ body {
 /* ============ CONTROLS ============ */
 
 .controls {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: white;
+  padding: 15px;
+  border-radius: 10px;
+  margin-bottom: 15px;
   display: flex;
   gap: 12px;
-  margin-bottom: 20px;
   flex-wrap: wrap;
   align-items: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
+
 
 .controls input,
 .controls select {
