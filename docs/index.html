@@ -264,21 +264,23 @@
       </div>
 
       <!-- Cash Flows Tab -->
-      <div id="cash-flows" class="tab-content">
-        <div class="controls">
-          <input type="date" id="cashFlowDate" required>
-          <select id="cashFlowType" required>
-            <option value="">Flow Type</option>
-            <option value="deposit">Deposit</option>
-            <option value="withdrawal">Withdrawal</option>
-          </select>
-          <input type="number" id="cashFlowAmount" placeholder="Amount" step="0.01" required>
-          <button id="addCashFlowBtn" class="btn-primary">Add Cash Flow</button>
-        </div>
-
-        <div class="table-controls">
-          <button id="deleteCashFlowSelected" class="btn-danger">🗑️ Delete Selected</button>
-        </div>
+   <div id="cash-flows" class="tab-content">
+  <div class="controls">
+    <input type="date" id="cashFlowDate" required>
+    <select id="cashFlowType" required>
+      <option value="">Flow Type</option>
+      <option value="deposit">Deposit</option>
+      <option value="withdrawal">Withdrawal</option>
+    </select>
+    <input type="number" id="cashFlowAmount" placeholder="Amount" step="0.01" required>
+    <button id="addCashFlowBtn" class="btn-primary">Add Cash Flow</button>
+  </div>
+  
+  <div class="table-controls">
+    <button id="importCashFlowCsvBtn" class="btn-secondary">📥 Import CSV</button>
+    <input type="file" id="cashFlowCsvFileInput" accept=".csv,.xlsx,.xls" style="display: none;">
+    <button id="deleteCashFlowSelected" class="btn-danger">🗑️ Delete Selected</button>
+  </div>
 
         <div class="table-container">
           <table id="cashFlowsTable">
@@ -305,5 +307,9 @@
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   </script>
   <script src="app.js"></script>
+  <script>
+  console.log('App.js loaded?', typeof transactions !== 'undefined');
+  console.log('Functions exist?', typeof initializeTabs !== 'undefined');
+</script>
 </body>
 </html>

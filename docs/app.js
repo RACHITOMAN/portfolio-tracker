@@ -115,7 +115,6 @@ function updatePortfolioTabs() {
           <thead>
             <tr>
               <th>Ticker</th>
-              <th>Company</th>
               <th>Shares</th>
               <th>Avg Cost</th>
               <th>Current Price</th>
@@ -212,6 +211,49 @@ function savePortfolios() {
 
 // ============ SUPABASE FUNCTIONS ============
 
+// Helper: Convert date DD/MM/YYYY → YYYY-MM-DD for Supabase
+function convertDateForSupabase(dateValue) {
+  if (!dateValue) return null;
+  
+  // If it's a Date object
+  if (dateValue instanceof Date) {
+    const year = dateValue.getFullYear();
+    const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+    const day = String(dateValue.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  // If it's DD/MM/YYYY format
+  if (typeof dateValue === 'string' && dateValue.includes('/')) {
+    const [day, month, year] = dateValue.split('/');
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+  
+  // If already in YYYY-MM-DD format
+  if (typeof dateValue === 'string' && dateValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    return dateValue;
+  }
+  
+  // Fallback: convert to Date and format
+  const date = new Date(dateValue);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// Helper: Convert date YYYY-MM-DD → DD/MM/YYYY for display
+function convertDateFromSupabase(dateStr) {
+  if (!dateStr) return '';
+  
+  if (typeof dateStr === 'string' && dateStr.includes('-')) {
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  }
+  
+  return dateStr;
+}
+
 async function loadDataFromSupabase() {
   try {
     const [transactionsData, cashFlowsData] = await Promise.all([
@@ -220,33 +262,73 @@ async function loadDataFromSupabase() {
     ]);
 
     if (transactionsData.data) {
-      transactions = transactionsData.data;
+      // Convert Supabase format (shares, YYYY-MM-DD) to app format (quantity, DD/MM/YYYY)
+      transactions = transactionsData.data.map(t => ({
+        id: t.id,
+        date: convertDateFromSupabase(t.date),
+        symbol: t.symbol,
+        portfolio: t.portfolio,
+        type: t.type,
+        quantity: t.shares, // shares → quantity
+        price: t.price,
+        premium_type: t.premium_type
+      }));
     }
+    
     if (cashFlowsData.data) {
-      cashFlows = cashFlowsData.data;
+      // Convert dates for cash flows
+      cashFlows = cashFlowsData.data.map(cf => ({
+        id: cf.id,
+        date: convertDateFromSupabase(cf.date),
+        type: cf.type,
+        amount: cf.amount
+      }));
     }
 
-    console.log('Loaded from Supabase:', transactions.length, 'transactions,', cashFlows.length, 'cash flows');
+    console.log('✅ Loaded from Supabase:', transactions.length, 'transactions,', cashFlows.length, 'cash flows');
   } catch (error) {
-    console.error('Error loading from Supabase:', error);
+    console.error('❌ Error loading from Supabase:', error);
   }
 }
 
 async function saveDataToSupabase() {
   try {
+    // Convert and save transactions
     await supabase.from('transactions').delete().neq('id', 0);
+    
     if (transactions.length > 0) {
-      await supabase.from('transactions').insert(transactions);
+      // Convert app format (quantity, DD/MM/YYYY) to Supabase format (shares, YYYY-MM-DD)
+      const transactionsForSupabase = transactions.map(t => ({
+        id: Math.floor(t.id), // Ensure integer ID
+        date: convertDateForSupabase(t.date),
+        symbol: t.symbol,
+        portfolio: t.portfolio || 'default-portfolio',
+        type: t.type,
+        shares: t.quantity, // quantity → shares
+        price: t.price,
+        premium_type: t.premium_type || null
+      }));
+      
+      await supabase.from('transactions').insert(transactionsForSupabase);
     }
 
+    // Convert and save cash flows
     await supabase.from('cash_flows').delete().neq('id', 0);
+    
     if (cashFlows.length > 0) {
-      await supabase.from('cash_flows').insert(cashFlows);
+      const cashFlowsForSupabase = cashFlows.map(cf => ({
+        id: Math.floor(cf.id),
+        date: convertDateForSupabase(cf.date),
+        type: cf.type,
+        amount: cf.amount
+      }));
+      
+      await supabase.from('cash_flows').insert(cashFlowsForSupabase);
     }
 
-    console.log('Saved to Supabase');
+    console.log('✅ Saved to Supabase');
   } catch (error) {
-    console.error('Error saving to Supabase:', error);
+    console.error('❌ Error saving to Supabase:', error);
   }
 }
 
@@ -263,15 +345,17 @@ function initializeTabs() {
       this.classList.add('active');
       document.getElementById(targetTab).classList.add('active');
       
-      // Show/hide cash flow summary cards
+      // Show/hide cash flow summary cards (with safety check)
       if (targetTab === 'cash-flows') {
-        document.getElementById('cashFlowCard1').style.display = 'block';
-        document.getElementById('cashFlowCard2').style.display = 'block';
-        document.getElementById('cashFlowCard3').style.display = 'block';
+        ['cashFlowCard1', 'cashFlowCard2', 'cashFlowCard3'].forEach(id => {
+          const card = document.getElementById(id);
+          if (card) card.style.display = 'block';
+        });
       } else {
-        document.getElementById('cashFlowCard1').style.display = 'none';
-        document.getElementById('cashFlowCard2').style.display = 'none';
-        document.getElementById('cashFlowCard3').style.display = 'none';
+        ['cashFlowCard1', 'cashFlowCard2', 'cashFlowCard3'].forEach(id => {
+          const card = document.getElementById(id);
+          if (card) card.style.display = 'none';
+        });
       }
     });
   });
@@ -286,7 +370,6 @@ async function addTransaction() {
   const type = document.getElementById('type').value;
   const quantity = parseFloat(document.getElementById('quantity').value) || 0;
   const price = parseFloat(document.getElementById('price').value);
-  const notes = document.getElementById('notes').value.trim();
   const premiumType = document.getElementById('premiumType').value;
 
   if (!date || !symbol || !portfolio || !type || isNaN(price)) {
@@ -312,7 +395,6 @@ async function addTransaction() {
     type,
     quantity: type === 'sell' ? -Math.abs(quantity) : quantity,
     price,
-    notes,
     premium_type: type === 'premium' ? premiumType : null
   };
 
@@ -325,7 +407,6 @@ async function addTransaction() {
   document.getElementById('type').value = '';
   document.getElementById('quantity').value = '';
   document.getElementById('price').value = '';
-  document.getElementById('notes').value = '';
   document.getElementById('premiumType').value = '';
   document.getElementById('premiumType').style.display = 'none';
 
@@ -348,6 +429,32 @@ async function confirmDeleteSelected() {
   
   await saveDataToSupabase();
   refreshPricesAndNames();
+}
+
+// ============ IMPROVED CLEAR ALL WITH WARNING ============
+
+async function confirmClearData() {
+  const warning = '⚠️ DANGER: This will permanently delete ALL transactions and cash flows from Supabase!\n\n' +
+                  '❌ This action CANNOT be undone.\n' +
+                  '💾 RECOMMENDATION: Export to CSV first (click Export CSV button)\n\n' +
+                  'To confirm, type exactly: DELETE ALL';
+  
+  const confirmation = prompt(warning);
+  
+  if (confirmation === 'DELETE ALL') {
+    // Double check
+    if (confirm('Are you absolutely sure? This is your last chance to cancel.')) {
+      transactions = [];
+      cashFlows = [];
+      await saveDataToSupabase();
+      refreshPricesAndNames();
+      alert('✅ All data cleared from Supabase');
+    } else {
+      alert('❌ Cancelled - no data was deleted');
+    }
+  } else {
+    alert('❌ Incorrect confirmation - no data was deleted\n\nYou must type exactly: DELETE ALL');
+  }
 }
 
 // ============ DISPLAY FUNCTIONS ============
@@ -380,7 +487,6 @@ function updateTransactionsTable() {
   sortedTransactions.forEach(transaction => {
     const row = tbody.insertRow();
     const currentPrice = livePrices[transaction.symbol] || 0;
-    const companyName = companyCache[transaction.symbol] || '';
     const portfolioObj = portfolios.find(p => p.id === transaction.portfolio);
     const portfolioName = portfolioObj ? portfolioObj.name : 'Unknown';
 
@@ -388,14 +494,12 @@ function updateTransactionsTable() {
       <td><input type="checkbox" data-id="${transaction.id}"></td>
       <td>${transaction.date}</td>
       <td><strong>${transaction.symbol}</strong></td>
-      <td>${companyName}</td>
       <td>${portfolioName}</td>
       <td>${transaction.type}${transaction.premium_type ? ` (${transaction.premium_type})` : ''}</td>
       <td>${transaction.quantity}</td>
       <td>$${transaction.price.toFixed(2)}</td>
       <td>$${(transaction.quantity * transaction.price).toFixed(2)}</td>
       <td>$${currentPrice.toFixed(2)}</td>
-      <td>${transaction.notes || ''}</td>
     `;
   });
 
@@ -414,7 +518,6 @@ function updatePortfolioTable(portfolioId, tbodyId) {
     if (data.shares === 0) return;
 
     const currentPrice = livePrices[symbol] || 0;
-    const companyName = companyCache[symbol] || '';
     const marketValue = data.shares * currentPrice;
     const gainLoss = marketValue - data.totalCost;
     const gainLossPercent = data.totalCost > 0 ? (gainLoss / data.totalCost) * 100 : 0;
@@ -422,7 +525,6 @@ function updatePortfolioTable(portfolioId, tbodyId) {
     const row = tbody.insertRow();
     row.innerHTML = `
       <td><strong>${symbol}</strong></td>
-      <td>${companyName}</td>
       <td>${data.shares.toFixed(2)}</td>
       <td>$${data.avgCost.toFixed(2)}</td>
       <td>$${currentPrice.toFixed(2)}</td>
@@ -515,7 +617,6 @@ function updateSoldPositions() {
     data.sells.forEach(sell => {
       const portfolioObj = portfolios.find(p => p.id === data.portfolio);
       const portfolioName = portfolioObj ? portfolioObj.name : 'Unknown';
-      const companyName = companyCache[data.symbol] || '';
       
       const relevantBuys = data.buys.filter(b => b.date <= sell.date);
       
@@ -536,7 +637,6 @@ function updateSoldPositions() {
         const row = tbody.insertRow();
         row.innerHTML = `
           <td><strong>${data.symbol}</strong></td>
-          <td>${companyName}</td>
           <td>${portfolioName}</td>
           <td>${buyDate}</td>
           <td>${sell.date}</td>
@@ -556,12 +656,10 @@ function updateSoldPositions() {
     data.premiums.forEach(premium => {
       const portfolioObj = portfolios.find(p => p.id === data.portfolio);
       const portfolioName = portfolioObj ? portfolioObj.name : 'Unknown';
-      const companyName = companyCache[data.symbol] || '';
 
       const row = tbody.insertRow();
       row.innerHTML = `
         <td><strong>${data.symbol}</strong></td>
-        <td>${companyName}</td>
         <td>${portfolioName}</td>
         <td>N/A</td>
         <td>${premium.date}</td>
@@ -695,7 +793,7 @@ async function addCashFlow() {
   const date = document.getElementById('cashFlowDate').value;
   const type = document.getElementById('cashFlowType').value;
   const amount = parseFloat(document.getElementById('cashFlowAmount').value);
-  const notes = document.getElementById('cashFlowNotes').value.trim();
+  const notes = document.getElementById('cashFlowNotes') ? document.getElementById('cashFlowNotes').value.trim() : '';
 
   if (!date || !type || isNaN(amount)) {
     alert('Please fill in all required fields');
@@ -706,8 +804,7 @@ async function addCashFlow() {
     id: Date.now(),
     date,
     type,
-    amount: type === 'withdrawal' ? -Math.abs(amount) : Math.abs(amount),
-    notes
+    amount: type === 'withdrawal' ? -Math.abs(amount) : Math.abs(amount)
   };
 
   cashFlows.push(cashFlow);
@@ -716,13 +813,17 @@ async function addCashFlow() {
   document.getElementById('cashFlowDate').value = '';
   document.getElementById('cashFlowType').value = '';
   document.getElementById('cashFlowAmount').value = '';
-  document.getElementById('cashFlowNotes').value = '';
+  if (document.getElementById('cashFlowNotes')) {
+    document.getElementById('cashFlowNotes').value = '';
+  }
   
   updateCashFlowTable();
 }
 
 function updateCashFlowTable() {
   const tbody = document.getElementById('cashFlowsBody');
+  if (!tbody) return;
+  
   tbody.innerHTML = '';
 
   const sortedFlows = [...cashFlows].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -734,7 +835,6 @@ function updateCashFlowTable() {
       <td>${flow.date}</td>
       <td>${flow.type}</td>
       <td class="${flow.amount >= 0 ? 'positive' : 'negative'}">$${flow.amount.toFixed(2)}</td>
-      <td>${flow.notes || ''}</td>
     `;
   });
 
@@ -754,11 +854,19 @@ function updateCashFlowTable() {
   const cashGain = portfolioValue - netCash;
   const cashGainPercent = netCash > 0 ? (cashGain / netCash) * 100 : 0;
   
-  document.getElementById('totalCashInput').textContent = `$${netCash.toFixed(2)}`;
-  document.getElementById('cashFlowPortfolioValue').textContent = `$${portfolioValue.toFixed(2)}`;
-  document.getElementById('cashFlowGainLoss').textContent = `$${cashGain.toFixed(2)}`;
-  document.getElementById('cashFlowGainPercent').textContent = `${cashGainPercent.toFixed(2)}%`;
-  document.getElementById('cashFlowGainPercent').className = cashGainPercent >= 0 ? 'change positive' : 'change negative';
+  if (document.getElementById('totalCashInput')) {
+    document.getElementById('totalCashInput').textContent = `$${netCash.toFixed(2)}`;
+  }
+  if (document.getElementById('cashFlowPortfolioValue')) {
+    document.getElementById('cashFlowPortfolioValue').textContent = `$${portfolioValue.toFixed(2)}`;
+  }
+  if (document.getElementById('cashFlowGainLoss')) {
+    document.getElementById('cashFlowGainLoss').textContent = `$${cashGain.toFixed(2)}`;
+  }
+  if (document.getElementById('cashFlowGainPercent')) {
+    document.getElementById('cashFlowGainPercent').textContent = `${cashGainPercent.toFixed(2)}%`;
+    document.getElementById('cashFlowGainPercent').className = cashGainPercent >= 0 ? 'change positive' : 'change negative';
+  }
 }
 
 async function deleteCashFlowSelected() {
@@ -779,7 +887,7 @@ async function deleteCashFlowSelected() {
   updateCashFlowTable();
 }
 
-// ============ PRICE FETCHING ============
+// ============ PRICE FETCHING WITH PROGRESS ============
 
 function shouldFetchNewPrices() {
   const lastFetch = localStorage.getItem('lastPriceFetch');
@@ -805,10 +913,24 @@ function savePricesCache() {
   localStorage.setItem('lastPriceFetch', Date.now().toString());
 }
 
+function updatePriceLoadingProgress(currentBatch, totalBatches, totalSymbols, fetchedCount, minutesLeft = 0) {
+  const btn = document.getElementById('refreshPricesBtn');
+  if (!btn) return;
+  
+  const percentage = Math.round((fetchedCount / totalSymbols) * 100);
+  
+  if (minutesLeft > 0) {
+    btn.textContent = `⏳ ${percentage}% - Waiting (${minutesLeft}m left)`;
+  } else {
+    btn.textContent = `⏳ Fetching ${percentage}% (${fetchedCount}/${totalSymbols})`;
+  }
+}
+
 async function fetchLivePrices(symbols) {
   const apiKey = localStorage.getItem('apiKey');
   if (!apiKey) {
     console.error('No API key found');
+    alert('Please set your API key in Settings first!');
     return;
   }
 
@@ -816,9 +938,14 @@ async function fetchLivePrices(symbols) {
   
   const RATE_LIMIT = 8;
   const RATE_WINDOW = 60000;
+  const totalBatches = Math.ceil(symbols.length / RATE_LIMIT);
 
   for (let i = 0; i < symbols.length; i += RATE_LIMIT) {
     const batch = symbols.slice(i, i + RATE_LIMIT);
+    const currentBatch = Math.floor(i / RATE_LIMIT) + 1;
+    
+    // Update progress display
+    updatePriceLoadingProgress(currentBatch, totalBatches, symbols.length, i + batch.length);
     
     await Promise.all(batch.map(async symbol => {
       try {
@@ -834,13 +961,20 @@ async function fetchLivePrices(symbols) {
     }));
     
     if (i + RATE_LIMIT < symbols.length) {
-      console.log(`Fetched ${Math.min(i + RATE_LIMIT, symbols.length)}/${symbols.length}, waiting 60s...`);
+      const remaining = symbols.length - (i + RATE_LIMIT);
+      const minutesLeft = Math.ceil(remaining / RATE_LIMIT);
+      console.log(`Fetched ${Math.min(i + RATE_LIMIT, symbols.length)}/${symbols.length}, waiting 60s... (${minutesLeft} min remaining)`);
+      
+      // Update waiting message
+      updatePriceLoadingProgress(currentBatch, totalBatches, symbols.length, i + batch.length, minutesLeft);
+      
       await new Promise(resolve => setTimeout(resolve, RATE_WINDOW));
     }
   }
   
   console.log('All prices fetched, saving cache...');
   savePricesCache();
+  console.log('Cache saved, returning...');
 }
 
 async function refreshPricesAndNames() {
@@ -866,11 +1000,13 @@ async function refreshPricesAndNames() {
     return;
   }
 
-  console.log('Cache expired, fetching fresh prices for', symbols.length, 'symbols');
+  console.log('Checking price cache...');
 
   if (shouldFetchNewPrices()) {
+    console.log('Cache expired, fetching fresh prices for', symbols.length, 'symbols');
     await fetchLivePrices(symbols);
   } else {
+    console.log('Using cached prices');
     loadCachedPrices();
   }
 
@@ -899,13 +1035,79 @@ async function refreshAllPrices() {
     return;
   }
   
-  console.log('Refreshing prices for', symbols.length, 'symbols...');
+  const btn = document.getElementById('refreshPricesBtn');
+  if (!btn) return;
   
-  livePrices = {};
-  await fetchLivePrices(symbols);
-  refreshPricesAndNames();
+  const originalText = btn.textContent;
   
-  alert('Prices refreshed successfully!');
+  // Disable button during fetch
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+  btn.style.cursor = 'not-allowed';
+  
+  try {
+    console.log('Refreshing prices for', symbols.length, 'symbols...');
+    
+    livePrices = {};
+    await fetchLivePrices(symbols);
+    refreshPricesAndNames();
+    
+    alert('✅ Prices refreshed successfully!');
+  } catch (error) {
+    console.error('Error refreshing prices:', error);
+    alert('❌ Error refreshing prices. Check console for details.');
+  } finally {
+    // Reset button
+    btn.textContent = originalText;
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+  }
+}
+
+// ============ CSV EXPORT ============
+
+function exportTransactionsToCSV() {
+  if (transactions.length === 0) {
+    alert('No transactions to export');
+    return;
+  }
+
+  const headers = ['Date', 'Symbol', 'Portfolio', 'Type', 'Quantity', 'Price', 'PremiumType'];
+  
+  const rows = transactions.map(t => {
+    const portfolioObj = portfolios.find(p => p.id === t.portfolio);
+    const portfolioName = portfolioObj ? portfolioObj.name : 'Unknown';
+    
+    return [
+      t.date,
+      t.symbol,
+      portfolioName,
+      t.type,
+      t.quantity,
+      t.price,
+      t.premium_type || ''
+    ];
+  });
+
+  const csvContent = [headers, ...rows]
+    .map(row => row.map(cell => `"${cell}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  
+  const timestamp = new Date().toISOString().split('T')[0];
+  link.setAttribute('href', url);
+  link.setAttribute('download', `portfolio-transactions-${timestamp}.csv`);
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  alert(`Exported ${transactions.length} transactions to CSV`);
 }
 
 // ============ CSV IMPORT ============
@@ -921,6 +1123,8 @@ async function handleCsvImport(event) {
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
     const jsonData = XLSX.utils.sheet_to_json(firstSheet);
 
+    let importedCount = 0;
+    
     jsonData.forEach(row => {
       const transaction = {
         id: Date.now() + Math.random(),
@@ -930,18 +1134,70 @@ async function handleCsvImport(event) {
         type: (row.Type || row.type || '').toLowerCase(),
         quantity: parseFloat(row.Quantity || row.quantity || 0),
         price: parseFloat(row.Price || row.price || 0),
-        notes: row.Notes || row.notes || '',
         premium_type: row.PremiumType || row.premium_type || null
       };
 
+      // Match portfolio name to ID
+      const portfolioObj = portfolios.find(p => p.name === transaction.portfolio);
+      if (portfolioObj) {
+        transaction.portfolio = portfolioObj.id;
+      }
+
       if (transaction.symbol && transaction.date && transaction.type) {
         transactions.push(transaction);
+        importedCount++;
       }
     });
 
     await saveDataToSupabase();
     refreshPricesAndNames();
-    alert(`Imported ${jsonData.length} transactions`);
+    alert(`✅ Imported ${importedCount} transactions successfully!`);
+  };
+  
+  reader.readAsArrayBuffer(file);
+  event.target.value = '';
+}
+
+async function handleCashFlowCsvImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const data = new Uint8Array(e.target.result);
+    const workbook = XLSX.read(data, { type: 'array' });
+    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+    const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+
+    let importedCount = 0;
+    
+    jsonData.forEach(row => {
+      const cashFlow = {
+        id: Date.now() + Math.random(),
+        date: row.Date || row.date,
+        type: (row.Type || row.type || '').toLowerCase(),
+        amount: parseFloat(row.Amount || row.amount || 0)
+      };
+
+      // Ensure withdrawal amounts are negative
+      if (cashFlow.type === 'withdrawal' && cashFlow.amount > 0) {
+        cashFlow.amount = -Math.abs(cashFlow.amount);
+      }
+      
+      // Ensure deposit amounts are positive
+      if (cashFlow.type === 'deposit' && cashFlow.amount < 0) {
+        cashFlow.amount = Math.abs(cashFlow.amount);
+      }
+
+      if (cashFlow.date && cashFlow.type && !isNaN(cashFlow.amount)) {
+        cashFlows.push(cashFlow);
+        importedCount++;
+      }
+    });
+
+    await saveDataToSupabase();
+    updateCashFlowTable();
+    alert(`✅ Imported ${importedCount} cash flows successfully!`);
   };
   
   reader.readAsArrayBuffer(file);
@@ -951,18 +1207,23 @@ async function handleCsvImport(event) {
 // ============ SEARCH & SORT ============
 
 function searchTicker() {
-  const query = document.getElementById('tickerSearch').value.toUpperCase().trim();
+  const query = document.getElementById('tickerSearch');
   if (!query) return;
+  
+  const searchValue = query.value.toUpperCase().trim();
+  if (!searchValue) return;
 
   const rows = document.querySelectorAll('#transactionsBody tr');
   rows.forEach(row => {
-    const symbol = row.cells[2].textContent.trim();
-    row.style.display = symbol.includes(query) ? '' : 'none';
+    const symbol = row.cells[2] ? row.cells[2].textContent.trim() : '';
+    row.style.display = symbol.includes(searchValue) ? '' : 'none';
   });
 }
 
 function clearTickerSearch() {
-  document.getElementById('tickerSearch').value = '';
+  const query = document.getElementById('tickerSearch');
+  if (query) query.value = '';
+  
   document.querySelectorAll('#transactionsBody tr').forEach(row => {
     row.style.display = '';
   });
@@ -992,6 +1253,8 @@ function initializeSortListeners() {
 
 function updateSelectAllCheckbox() {
   const selectAll = document.getElementById('selectAll');
+  if (!selectAll) return;
+  
   const checkboxes = document.querySelectorAll('#transactionsBody input[type="checkbox"]');
   const checked = document.querySelectorAll('#transactionsBody input[type="checkbox"]:checked');
   
@@ -1033,12 +1296,30 @@ window.addEventListener('click', function(event) {
 document.getElementById('addTransactionBtn').addEventListener('click', addTransaction);
 document.getElementById('addCashFlowBtn').addEventListener('click', addCashFlow);
 document.getElementById('deleteSelected').addEventListener('click', confirmDeleteSelected);
-document.getElementById('deleteCashFlowSelected').addEventListener('click', deleteCashFlowSelected);
+if (document.getElementById('deleteCashFlowSelected')) {
+  document.getElementById('deleteCashFlowSelected').addEventListener('click', deleteCashFlowSelected);
+}
 document.getElementById('importCsvBtn').addEventListener('click', () => document.getElementById('csvFileInput').click());
+document.getElementById('exportCsvBtn').addEventListener('click', exportTransactionsToCSV);
 document.getElementById('csvFileInput').addEventListener('change', handleCsvImport);
-document.getElementById('searchTickerBtn').addEventListener('click', searchTicker);
-document.getElementById('clearTickerBtn').addEventListener('click', clearTickerSearch);
-document.getElementById('refreshPricesBtn').addEventListener('click', refreshAllPrices);
+
+// Cash Flow CSV Import
+if (document.getElementById('importCashFlowCsvBtn')) {
+  document.getElementById('importCashFlowCsvBtn').addEventListener('click', () => document.getElementById('cashFlowCsvFileInput').click());
+}
+if (document.getElementById('cashFlowCsvFileInput')) {
+  document.getElementById('cashFlowCsvFileInput').addEventListener('change', handleCashFlowCsvImport);
+}
+
+if (document.getElementById('searchTickerBtn')) {
+  document.getElementById('searchTickerBtn').addEventListener('click', searchTicker);
+}
+if (document.getElementById('clearTickerBtn')) {
+  document.getElementById('clearTickerBtn').addEventListener('click', clearTickerSearch);
+}
+if (document.getElementById('refreshPricesBtn')) {
+  document.getElementById('refreshPricesBtn').addEventListener('click', refreshAllPrices);
+}
 
 document.getElementById('type').addEventListener('change', function() {
   const premiumTypeSelect = document.getElementById('premiumType');
@@ -1051,19 +1332,21 @@ document.getElementById('selectAll').addEventListener('change', function() {
   });
 });
 
-document.getElementById('selectAllCashFlows').addEventListener('change', function() {
-  document.querySelectorAll('#cashFlowsBody input[type="checkbox"]').forEach(cb => {
-    cb.checked = this.checked;
+if (document.getElementById('selectAllCashFlows')) {
+  document.getElementById('selectAllCashFlows').addEventListener('change', function() {
+    document.querySelectorAll('#cashFlowsBody input[type="checkbox"]').forEach(cb => {
+      cb.checked = this.checked;
+    });
   });
-});
+}
 
 // ============ INITIALIZATION ============
 
 async function init() {
   checkFirstVisit();
+  initializePortfolios();
   initializeTabs();
   initializeSortListeners();
-  initializePortfolios();
   
   await loadDataFromSupabase();
   
