@@ -609,15 +609,28 @@ function initializeTabs() {
         const tabsWithDelete = ['total', ...portfolios.filter(p => p.id !== 'total').map(p => p.id), 'all', 'ticker', 'sold'];
 
         if (portfolioTabs.includes(tab.dataset.tab)) {
-          mainControls.style.display = 'flex';
-        } else if (tabsWithDelete.includes(tab.dataset.tab)) {
-          mainControls.style.display = 'flex';
-          mainControls.querySelectorAll('select, input:not([type="checkbox"]), #addTransactionBtn, #clearDataBtn, #importCsvBtn, #refreshPricesBtn').forEach(el => el.style.display = 'none');
-          document.getElementById('deleteSelected').style.display = 'inline-block';
-        } else {
-          mainControls.style.display = 'none';
-        }
+  mainControls.style.display = 'flex';
+  // Show all controls
+  mainControls.querySelectorAll('select, input, button').forEach(el => el.style.display = '');
+} else if (tabsWithDelete.includes(tab.dataset.tab)) {
+  mainControls.style.display = 'flex';
+  // Hide add transaction controls, show delete
+  mainControls.querySelectorAll('select, input:not([type="checkbox"]), #addTransactionBtn, #clearDataBtn').forEach(el => el.style.display = 'none');
+  const deleteBtn = document.getElementById('deleteSelected');
+  if (deleteBtn) deleteBtn.style.display = 'inline-block';
+} else {
+  mainControls.style.display = 'none';
+}
       }
+      if (tab.dataset.tab === 'ticker') {
+  console.log('Ticker tab clicked - showing delete button');
+  const deleteBtn = document.getElementById('deleteSelected');
+  console.log('Delete button:', deleteBtn);
+  if (deleteBtn) {
+    deleteBtn.style.display = 'inline-block';
+    console.log('Delete button display:', deleteBtn.style.display);
+  }
+}
       
       // Show/hide cash flow summary cards
       if (tab.dataset.tab === 'cashflow') {
@@ -654,24 +667,53 @@ function initializeSortListeners() {
   
   for (const portfolio in tables) {
     const table = tables[portfolio];
-    if (table) {
-      const headers = table.querySelectorAll('th');
-      headers.forEach(function(header) {
-        header.addEventListener('click', function() {
-          const column = header.dataset.sort;
-          if (!column || column === 'select') return;
-          const currentDirection = sortState[portfolio]?.direction || 'asc';
-          const newDirection = currentDirection === 'asc' ? 'desc' : 'asc';
-          if (!sortState[portfolio]) sortState[portfolio] = {};
-          sortState[portfolio] = { column: column, direction: newDirection };
-          headers.forEach(function(h) {
-            h.classList.remove('sort-asc', 'sort-desc');
-          });
-          header.classList.add('sort-' + newDirection);
-          sortTable(table, column, newDirection);
+    if (!table) continue;
+    
+    // Skip if already initialized
+    if (table.dataset.sortInitialized === 'true') continue;
+    table.dataset.sortInitialized = 'true';
+    
+    const headers = table.querySelectorAll('th');
+    headers.forEach(function(header) {
+      // Skip if no sort attribute or is select column
+      const column = header.dataset.sort;
+      if (!column || column === 'select') return;
+      
+      header.style.cursor = 'pointer';
+      
+      header.addEventListener('click', function handleSort() {
+        // Initialize sort state if needed
+        if (!sortState[portfolio]) {
+          sortState[portfolio] = { column: column, direction: 'asc' };
+        }
+        
+        // Determine new direction
+        let newDirection;
+        if (sortState[portfolio].column === column) {
+          // Same column - toggle direction
+          newDirection = sortState[portfolio].direction === 'asc' ? 'desc' : 'asc';
+        } else {
+          // Different column - start with asc
+          newDirection = 'asc';
+        }
+        
+        // Update state
+        sortState[portfolio] = { column: column, direction: newDirection };
+        
+        // Remove all sort indicators
+        headers.forEach(function(h) {
+          h.classList.remove('sort-asc', 'sort-desc');
         });
+        
+        // Add indicator to clicked header
+        this.classList.add('sort-' + newDirection);
+        
+        // Perform sort
+        sortTable(table, column, newDirection);
+        
+        console.log('Sorted', portfolio, 'by', column, newDirection);
       });
-    }
+    });
   }
 }
 
@@ -679,35 +721,50 @@ function sortTable(table, column, direction) {
   if (!table || !(table instanceof HTMLTableElement)) return;
   const tbody = table.querySelector('tbody');
   if (!tbody) return;
+  
   const rows = Array.from(tbody.querySelectorAll('tr'));
   const headers = Array.from(table.querySelectorAll('th'));
   const columnIndex = headers.findIndex(function(th) {
     return th.dataset.sort === column;
   });
+  
   if (columnIndex === -1) return;
   
   rows.sort(function(a, b) {
     if (!a.cells[columnIndex] || !b.cells[columnIndex]) return 0;
     
-    let aValue = a.cells[columnIndex].textContent;
-    let bValue = b.cells[columnIndex].textContent;
+    let aValue = a.cells[columnIndex].textContent.trim();
+    let bValue = b.cells[columnIndex].textContent.trim();
+    
+    // Remove currency symbols, percentage signs, etc.
     aValue = aValue.replace(/\$/g, '').replace(/%/g, '').replace(/ days/g, '').trim();
     bValue = bValue.replace(/\$/g, '').replace(/%/g, '').replace(/ days/g, '').trim();
     
+    // Handle "N/A" values
+    if (aValue === 'N/A' || aValue === 'Invalid Date') aValue = direction === 'asc' ? 'zzz' : '';
+    if (bValue === 'N/A' || bValue === 'Invalid Date') bValue = direction === 'asc' ? 'zzz' : '';
+    
+    // Check if values are dates in DD/MM/YYYY format
     if (aValue.match(/^\d{2}\/\d{2}\/\d{4}$/) && bValue.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
       const aParts = aValue.split('/');
       const bParts = bValue.split('/');
       aValue = new Date(aParts[2], aParts[1] - 1, aParts[0]).getTime();
       bValue = new Date(bParts[2], bParts[1] - 1, bParts[0]).getTime();
-    } else if (!isNaN(aValue) && !isNaN(bValue)) {
+    }
+    // Check if values are numbers
+    else if (!isNaN(aValue) && !isNaN(bValue) && aValue !== '' && bValue !== '') {
       aValue = parseFloat(aValue);
       bValue = parseFloat(bValue);
     }
     
+    // Compare values
     if (aValue < bValue) return direction === 'asc' ? -1 : 1;
     if (aValue > bValue) return direction === 'asc' ? 1 : -1;
     return 0;
   });
+  
+  // Clear tbody and append sorted rows
+  tbody.innerHTML = '';
   rows.forEach(function(row) {
     tbody.appendChild(row);
   });
@@ -801,63 +858,121 @@ async function confirmDeleteSelected() {
     return;
   }
   
-  const transactionsToDelete = [];
-  checkboxes.forEach(function(checkbox) {
-    const row = checkbox.closest('tr');
-    const cells = row.cells;
-    
-    const portfolioTabs = ['total', ...portfolios.filter(p => p.id !== 'total').map(p => p.id)];
-    
-    if (portfolioTabs.includes(currentTab)) {
+  const portfolioTabs = ['total', ...portfolios.filter(p => p.id !== 'total').map(p => p.id)];
+  
+  // Handle portfolio view tabs (delete all transactions for selected symbols)
+  if (portfolioTabs.includes(currentTab)) {
+    const symbolsToDelete = [];
+    checkboxes.forEach(function(checkbox) {
+      const row = checkbox.closest('tr');
+      const cells = row.cells;
       const symbol = cells[1].textContent;
-      transactionsToDelete.push({ symbol: symbol, type: 'portfolio' });
+      symbolsToDelete.push(symbol);
+    });
+    
+    // Delete from Supabase
+    for (const symbol of symbolsToDelete) {
+      await supabase.from('transactions').delete().eq('symbol', symbol);
     }
-    else if (currentTab === 'all' || currentTab === 'ticker') {
-      const type = cells[1].textContent.toLowerCase();
-      const portfolio = cells[2].textContent.toLowerCase();
-      const symbol = cells[3].textContent;
-      const shares = parseFloat(cells[4].textContent);
-      const price = parseFloat(cells[5].textContent.replace('$', ''));
-      const date = cells[6].textContent;
-      
-      transactionsToDelete.push({ type, portfolio, symbol, shares, price, date });
-    }
-    else if (currentTab === 'sold') {
+    
+    // Remove from local array
+    transactions = transactions.filter(t => !symbolsToDelete.includes(t.symbol));
+  }
+  // Handle "All Transactions" tab (delete specific transactions by index)
+  else if (currentTab === 'all') {
+    const indicesToDelete = [];
+    checkboxes.forEach(function(checkbox) {
+      const index = parseInt(checkbox.dataset.index);
+      if (!isNaN(index)) {
+        indicesToDelete.push(index);
+      }
+    });
+    
+    // Sort indices in descending order to delete from end to start
+    indicesToDelete.sort((a, b) => b - a);
+    
+    // Remove from local array
+    indicesToDelete.forEach(index => {
+      if (index >= 0 && index < transactions.length) {
+        transactions.splice(index, 1);
+      }
+    });
+    
+    // Save updated data
+    await saveDataToSupabase();
+  }
+  // Handle ticker search and sold positions
+  else if (currentTab === 'ticker') {
+  const transactionsToDelete = [];
+  
+  checkboxes.forEach(function(checkbox) {
+    // Skip summary row
+    if (checkbox.dataset.type === 'summary') return;
+    
+    // Get data from checkbox attributes
+    const type = checkbox.dataset.type;
+    const portfolio = checkbox.dataset.portfolio;
+    const symbol = checkbox.dataset.symbol;
+    const shares = parseFloat(checkbox.dataset.shares);
+    const price = parseFloat(checkbox.dataset.price);
+    const date = checkbox.dataset.date;
+    
+    transactionsToDelete.push({ type, portfolio, symbol, shares, price, date });
+  });
+  
+  console.log('Deleting from ticker search:', transactionsToDelete);
+  
+  if (transactionsToDelete.length === 0) {
+    alert('No transactions selected (summary row cannot be deleted)');
+    return;
+  }
+  
+  for (const item of transactionsToDelete) {
+    const isoDate = convertDateForSupabase(item.date);
+    
+    await supabase.from('transactions').delete().match({
+      type: item.type,
+      portfolio: item.portfolio,
+      symbol: item.symbol,
+      shares: item.shares,
+      price: item.price,
+      date: isoDate
+    });
+  }
+  
+  // Reload from Supabase
+  await loadDataFromSupabase();
+  
+  // Refresh the search to update the display
+  searchTicker();
+}
+  else if (currentTab === 'sold') {
+    const symbolsToDelete = [];
+    checkboxes.forEach(function(checkbox) {
+      const row = checkbox.closest('tr');
+      const cells = row.cells;
       const symbolText = cells[1].textContent;
       const symbol = symbolText.replace(' (Premium)', '').trim();
       const isPremium = symbolText.includes('(Premium)');
       
       if (isPremium) {
-        transactionsToDelete.push({ symbol: symbol, type: 'premium_delete' });
+        symbolsToDelete.push({ symbol: symbol, type: 'premium' });
       } else {
-        transactionsToDelete.push({ symbol: symbol, type: 'portfolio' });
+        symbolsToDelete.push({ symbol: symbol, type: 'all' });
       }
-    }
-  });
-  
-  if (transactionsToDelete[0] && (transactionsToDelete[0].type === 'portfolio' || transactionsToDelete[0].type === 'premium_delete')) {
-    for (const item of transactionsToDelete) {
-      if (item.type === 'premium_delete') {
+    });
+    
+    for (const item of symbolsToDelete) {
+      if (item.type === 'premium') {
         await supabase.from('transactions').delete().eq('symbol', item.symbol).eq('type', 'premium');
       } else {
         await supabase.from('transactions').delete().eq('symbol', item.symbol);
       }
     }
-  } else {
-    for (const item of transactionsToDelete) {
-      const isoDate = convertDateForSupabase(item.date);
-      await supabase.from('transactions').delete().match({
-        type: item.type,
-        portfolio: item.portfolio,
-        symbol: item.symbol,
-        shares: item.shares,
-        price: item.price,
-        date: isoDate
-      });
-    }
+    
+    await loadDataFromSupabase();
   }
   
-  await loadDataFromSupabase();
   refreshPricesAndNames();
 }
 
@@ -1184,10 +1299,10 @@ function searchTicker() {
     return pObj ? pObj.name : t.portfolio;
   }))].join(', ');
   
-  summaryRow.innerHTML = '<td><input type="checkbox" class="select-row"></td><td>SUMMARY</td><td>' + portfolioNames + '</td><td>' + tickerInput + '</td><td>' + totalShares.toFixed(2) + '</td><td>' + priceDisplay + '</td><td>' + formatDateDDMMYYYY(Date.now()) + '</td><td>$' + totalDividends.toFixed(2) + '</td>';
+  summaryRow.innerHTML = '<td><input type="checkbox" class="select-row" data-type="summary"></td><td>SUMMARY</td><td>' + portfolioNames + '</td><td>' + tickerInput + '</td><td>' + totalShares.toFixed(2) + '</td><td>' + priceDisplay + '</td><td>' + formatDateDDMMYYYY(Date.now()) + '</td><td>$' + totalDividends.toFixed(2) + '</td>';
   tbody.appendChild(summaryRow);
 
-  tickerTxns.forEach(function(t) {
+  tickerTxns.forEach(function(t, index) {
     const value = t.type === 'dividend' ? t.shares * t.price : t.type === 'buy' ? -t.shares * t.price : t.shares * t.price;
     const txRow = document.createElement('tr');
     
@@ -1195,7 +1310,8 @@ function searchTicker() {
     const portfolioObj = portfolios.find(p => p.id === t.portfolio);
     const portfolioName = portfolioObj ? portfolioObj.name : t.portfolio.toUpperCase();
     
-    txRow.innerHTML = '<td><input type="checkbox" class="select-row"></td><td>' + t.type.toUpperCase() + '</td><td>' + portfolioName + '</td><td>' + t.symbol + '</td><td>' + t.shares.toFixed(2) + '</td><td>$' + t.price.toFixed(2) + '</td><td>' + formatDateDDMMYYYY(t.date) + '</td><td>' + (t.type === 'dividend' ? '$' + value.toFixed(2) : '') + '</td>';
+    // Store all data in data attributes for easy deletion
+    txRow.innerHTML = '<td><input type="checkbox" class="select-row" data-type="' + t.type + '" data-portfolio="' + t.portfolio + '" data-symbol="' + t.symbol + '" data-shares="' + t.shares + '" data-price="' + t.price + '" data-date="' + t.date + '"></td><td>' + t.type.toUpperCase() + '</td><td>' + portfolioName + '</td><td>' + t.symbol + '</td><td>' + t.shares.toFixed(2) + '</td><td>$' + t.price.toFixed(2) + '</td><td>' + formatDateDDMMYYYY(t.date) + '</td><td>' + (t.type === 'dividend' ? '$' + value.toFixed(2) : '') + '</td>';
     tbody.appendChild(txRow);
   });
 }
@@ -1401,7 +1517,7 @@ function refreshPricesAndNames() {
  
   updateSummary(symbolData, portfolioData, portfolioFilter, soldData);
   updateCashFlowTable();
-}
+  }
 
 function updateTables(symbolData, portfolioData, soldData) {
   const tables = {
@@ -1423,13 +1539,14 @@ function updateTables(symbolData, portfolioData, soldData) {
     tbody.innerHTML = '';
     
     if (portfolio === 'all') {
-      transactions.forEach(function(t) {
-        const row = document.createElement('tr');
-        const portfolioName = portfolios.find(p => p.id === t.portfolio)?.name || t.portfolio.toUpperCase();
-        row.innerHTML = '<td><input type="checkbox" class="select-row"></td><td>' + t.type + '</td><td>' + portfolioName + '</td><td>' + t.symbol + '</td><td>' + t.shares.toFixed(2) + '</td><td>$' + t.price.toFixed(2) + '</td><td>' + formatDateDDMMYYYY(t.date) + '</td>';
-        tbody.appendChild(row);
-      });
-    } else if (portfolio === 'sold') {
+  transactions.forEach(function(t, index) {
+    const row = document.createElement('tr');
+    const portfolioName = portfolios.find(p => p.id === t.portfolio)?.name || t.portfolio.toUpperCase();
+    row.innerHTML = '<td><input type="checkbox" class="select-row" data-index="' + index + '"></td><td>' + t.type + '</td><td>' + portfolioName + '</td><td>' + t.symbol + '</td><td>' + t.shares.toFixed(2) + '</td><td>$' + t.price.toFixed(2) + '</td><td>' + formatDateDDMMYYYY(t.date) + '</td>';
+    tbody.appendChild(row);
+  });
+}
+    else if (portfolio === 'sold') {
       for (const key in soldData) {
         const data = soldData[key];
         const symbol = data.symbol || key;
