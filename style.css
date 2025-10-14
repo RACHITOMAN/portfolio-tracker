@@ -1,0 +1,835 @@
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: linear-gradient(#f0f4f8, #e8edf5);
+  color: #333;
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
+h1 {
+  font-size: 1.8em;
+  margin: 20px 0 5px;
+  color: #2c3e50;
+  display: flex;
+  align-items: center;
+}
+
+h1::before {
+  content: '📊';
+  margin-right: 8px;
+}
+
+p {
+  margin: 8px 0;
+  color: #555;
+  font-size: 0.95em;
+}
+/* Enhanced Welcome Modal */
+.welcome-modal {
+  max-width: 800px !important;
+}
+
+.welcome-header {
+  text-align: center;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #e9ecef;
+  margin-bottom: 30px;
+}
+
+.welcome-header h1 {
+  margin: 0 0 10px 0;
+  font-size: 2.5em;
+  color: #667eea;
+}
+
+.welcome-header h1::before {
+  content: '';
+  margin-right: 0;
+}
+
+.welcome-header .tagline {
+  color: #6c757d;
+  font-size: 1.1em;
+  margin: 0;
+  font-weight: 500;
+}
+
+.welcome-body h2 {
+  color: #2c3e50;
+  margin-top: 0;
+}
+
+.welcome-body > p {
+  font-size: 1.1em;
+  color: #555;
+  margin-bottom: 30px;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  margin: 30px 0;
+}
+
+.feature-item {
+  text-align: center;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  transition: transform 0.2s;
+}
+
+.feature-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.feature-icon {
+  font-size: 2.5em;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.feature-item h3 {
+  font-size: 1em;
+  margin: 10px 0 8px 0;
+  color: #2c3e50;
+}
+
+.feature-item p {
+  font-size: 0.9em;
+  color: #6c757d;
+  margin: 0;
+}
+
+.btn-large {
+  width: 100%;
+  padding: 16px 32px;
+  font-size: 1.2em;
+  margin-top: 20px;
+}
+
+@media (max-width: 768px) {
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .welcome-header h1 {
+    font-size: 2em;
+  }
+}
+/* Modal Styles */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(0,0,0,0.5);
+}
+
+.modal.active {
+  display: block;
+}
+
+.modal-content {
+  background-color: #fefefe;
+  margin: 5% auto;
+  padding: 30px;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  position: relative;
+}
+
+.modal-content h2 {
+  margin-top: 0;
+  color: #2c3e50;
+}
+
+.modal-content h3 {
+  margin-top: 20px;
+  color: #2c3e50;
+  font-size: 1.1em;
+}
+
+.modal-content ul {
+  line-height: 1.8;
+}
+
+.modal-content input {
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-sizing: border-box;
+  font-size: 1em;
+}
+/* ============ CSV HELP MODAL STYLES ============ */
+<!-- CSV Import Help Modal -->
+<div id="csvHelpModal" class="modal">
+  <div class="modal-content" style="max-width: 650px;">
+    <span class="close" onclick="document.getElementById('csvHelpModal').classList.remove('active')">&times;</span>
+    <h2>📥 CSV Import Guide</h2>
+    
+    <div style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea;">
+      <p style="margin: 0 0 10px 0; font-weight: 600; color: #2c3e50;">📋 Quick Start:</p>
+      <ol style="margin: 0; padding-left: 20px; line-height: 2;">
+        <li><strong>Click "📋 Download Template"</strong> for pre-formatted CSV</li>
+        <li><strong>Edit with your data</strong> (keep headers unchanged)</li>
+        <li><strong>Import using "📥 Import CSV"</strong></li>
+      </ol>
+    </div>
+    
+    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea;">
+      <p style="margin: 0 0 10px 0; font-weight: 600; color: #2c3e50;">Your Portfolio Names:</p>
+      <p id="portfolioNamesList" style="margin: 0; font-size: 1.4em; font-weight: 700; color: #667eea;">Loading...</p>
+    </div>
+    
+    <h3 style="color: #2c3e50; margin: 25px 0 15px 0; border-bottom: 2px solid #e9ecef; padding-bottom: 8px;">Required Format</h3>
+    
+    <code style="display: block; background: #2c3e50; color: #50fa7b; padding: 15px; border-radius: 6px; font-family: monospace; margin: 15px 0; border: 2px solid #667eea;">Type,Portfolio,Symbol,Shares,Price,Date</code>
+    
+    <table style="width: 100%; margin: 20px 0; border-collapse: collapse; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
+      <thead>
+        <tr style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+          <th style="padding: 15px; color: white; text-align: left; border: none;">Column</th>
+          <th style="padding: 15px; color: white; text-align: left; border: none;">Example</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="background: white;">
+          <td style="padding: 12px 15px; border: 1px solid #dee2e6; font-weight: 600; color: #667eea;">Type</td>
+          <td style="padding: 12px 15px; border: 1px solid #dee2e6;">buy, sell, dividend, premium</td>
+        </tr>
+        <tr style="background: #f8f9fa;">
+          <td style="padding: 12px 15px; border: 1px solid #dee2e6; font-weight: 600; color: #667eea;">Portfolio</td>
+          <td style="padding: 12px 15px; border: 1px solid #dee2e6;" id="portfolioExamples">RM, SA, PRO</td>
+        </tr>
+        <tr style="background: white;">
+          <td style="padding: 12px 15px; border: 1px solid #dee2e6; font-weight: 600; color: #667eea;">Symbol</td>
+          <td style="padding: 12px 15px; border: 1px solid #dee2e6;">AAPL, GOOG, MSFT</td>
+        </tr>
+        <tr style="background: #f8f9fa;">
+          <td style="padding: 12px 15px; border: 1px solid #dee2e6; font-weight: 600; color: #667eea;">Shares</td>
+          <td style="padding: 12px 15px; border: 1px solid #dee2e6;">100, 25.5 (positive numbers)</td>
+        </tr>
+        <tr style="background: white;">
+          <td style="padding: 12px 15px; border: 1px solid #dee2e6; font-weight: 600; color: #667eea;">Price</td>
+          <td style="padding: 12px 15px; border: 1px solid #dee2e6;">150.00, 200.50</td>
+        </tr>
+        <tr style="background: #f8f9fa;">
+          <td style="padding: 12px 15px; border: 1px solid #dee2e6; font-weight: 600; color: #667eea;">Date</td>
+          <td style="padding: 12px 15px; border: 1px solid #dee2e6;">19/12/2024 or 2024-12-19</td>
+        </tr>
+      </tbody>
+    </table>
+    
+    <div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #ffc107;">
+      <p style="margin: 0 0 12px 0; font-weight: 600; color: #856404;">⚠️ Important:</p>
+      <ul style="margin: 0; padding-left: 20px; color: #856404; line-height: 1.9;">
+        <li>Portfolio names must match exactly (case-insensitive)</li>
+        <li>Create portfolios in Settings before importing</li>
+        <li>Supports .csv and .xlsx files</li>
+      </ul>
+    </div>
+    
+    <button class="btn-primary" onclick="document.getElementById('csvHelpModal').classList.remove('active')" style="width: 100%; padding: 15px; font-size: 1.1em; margin-top: 25px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; cursor: pointer; border-radius: 8px; color: white; font-weight: 600;">Got it!</button>
+  </div>
+</div>
+/* Loading Spinner */
+.loading-spinner {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 30px 50px;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: 600;
+  z-index: 10000;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.loading-spinner::after {
+  content: '';
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  margin-left: 15px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+/* ============ MODAL UTILITIES ============ */
+.close {
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.close:hover,
+.close:focus {
+  color: #000;
+}
+
+#apiKeyStatus {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+#apiKeyStatus.success {
+  background: #d4edda;
+  color: #155724;
+}
+
+#apiKeyStatus.error {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.portfolio-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 10px 0;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.portfolio-name-input {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.btn-delete {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-delete:hover {
+  background: #c82333;
+}
+
+.btn-primary {
+  background: #007BFF;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  font-size: 1em;
+  margin-top: 10px;
+}
+
+.btn-primary:hover {
+  background: #0056b3;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.btn-secondary:hover {
+  background: #5a6268;
+}
+
+.btn-settings, .btn-help {
+  width: 100%;
+  padding: 10px;
+  margin-top: 10px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.95em;
+}
+
+.btn-settings {
+  background: #17a2b8;
+  color: white;
+}
+
+.btn-settings:hover {
+  background: #138496;
+}
+
+.btn-help {
+  background: #ffc107;
+  color: #333;
+}
+
+.btn-help:hover {
+  background: #e0a800;
+}
+
+.layout-wrapper {
+  display: flex;
+  width: 100%;
+  gap: 20px;
+  margin: 0 auto;
+  flex-grow: 1;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+.sidebar {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  width: 200px;
+  min-height: 0;
+  overflow-y: auto;
+  z-index: 200;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.main-content {
+  flex-grow: 1;
+  width: calc(100% - 220px);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.tabs {
+  background: white;
+  border-radius: 12px;
+  padding: 8px 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tab {
+  background: none;
+  border: none;
+  padding: 10px 16px;
+  cursor: pointer;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.9em;
+  transition: all 0.2s;
+  color: white;
+}
+
+.tab:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+.tab.active {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.25);
+  transform: translateY(-2px);
+}
+
+.tab[data-tab="total"] {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.tab.custom-portfolio.portfolio-1 {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.tab.custom-portfolio.portfolio-2 {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.tab.custom-portfolio.portfolio-3 {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.tab.custom-portfolio.portfolio-4 {
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+}
+
+.tab.custom-portfolio.portfolio-5 {
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+}
+
+.tab[data-tab="sold"] {
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+}
+
+.tab[data-tab="cashflow"] {
+  background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+}
+
+.tab[data-tab="ticker"] {
+  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+  color: #333;
+}
+
+.tab[data-tab="all"] {
+  background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+  color: #333;
+}
+
+#importCsvBtn {
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  color: white;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#importCsvBtn:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+#exportCsvBtn {
+  background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+  color: white;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#exportCsvBtn:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+#downloadTemplateBtn {
+  background: linear-gradient(135deg, #6f42c1 0%, #5a2d91 100%);
+  color: white;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#downloadTemplateBtn:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+#refreshPricesBtn {
+  background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+  color: white;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#refreshPricesBtn:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+.controls {
+  background: white;
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.controls input, .controls select {
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 1em;
+  min-width: 140px;
+}
+
+#addTransactionBtn, #clearDataBtn, #deleteSelected, #addCashFlowBtn, #deleteCashFlowSelected {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  background: #007BFF;
+  color: white;
+  transition: background 0.2s;
+}
+
+#addTransactionBtn:hover, #clearDataBtn:hover, #deleteSelected:hover, #addCashFlowBtn:hover, #deleteCashFlowSelected:hover {
+  background: #0056b3;
+}
+
+.table-responsive {
+  overflow-x: auto;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  padding: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  min-width: 800px;
+}
+
+th, td {
+  padding: 12px;
+  border: 1px solid #e9ecef;
+  text-align: center;
+  font-size: 0.9em;
+  width: 7.14%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+th.weighted-days-held, td.weighted-days-held {
+  width: 80px;
+  white-space: normal;
+  word-wrap: break-word;
+}
+
+th {
+  background: #e9ecef;
+  font-weight: 600;
+  color: #2c3e50;
+  cursor: pointer;
+}
+
+th:hover {
+  background: #d5d8dc;
+}
+
+th.sort-asc::after {
+  content: ' ▲';
+  font-size: 0.7em;
+}
+
+th.sort-desc::after {
+  content: ' ▼';
+  font-size: 0.7em;
+}
+
+td.negative {
+  color: red;
+}
+
+td.positive {
+  color: green;
+}
+
+tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+tr:hover {
+  background: #f1f5f9;
+}
+
+.ticker-search-controls {
+  background: white;
+  padding: 15px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+#tickerSearchInput, #searchTickerBtn, #clearTickerBtn {
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 1em;
+}
+
+#searchTickerBtn, #clearTickerBtn {
+  border: none;
+  cursor: pointer;
+}
+
+#searchTickerBtn {
+  background: #007BFF;
+  color: white;
+}
+
+#searchTickerBtn:hover {
+  background: #0056b3;
+}
+
+#clearTickerBtn {
+  background: #6c757d;
+  color: white;
+}
+
+#clearTickerBtn:hover {
+  background: #5a6268;
+}
+
+.portfolio-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.summary-card {
+  background: #fff;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  transition: transform 0.2s;
+}
+
+.summary-card:hover {
+  transform: translateY(-2px);
+}
+
+.summary-card h3 {
+  font-size: 1em;
+  margin: 0 0 8px;
+  color: #2c3e50;
+}
+
+.summary-card .value {
+  font-size: 1.2em;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.summary-card .change {
+  font-size: 0.9em;
+  color: #555;
+}
+
+/* ============ ACCESSIBILITY - FOCUS STATES ============ */
+button:focus,
+input:focus,
+select:focus,
+.tab:focus {
+  outline: 3px solid #4a90e2;
+  outline-offset: 2px;
+}
+
+input[type="checkbox"]:focus {
+  outline: 2px solid #4a90e2;
+  outline-offset: 1px;
+}
+
+.close:focus {
+  outline: 3px solid #4a90e2;
+  outline-offset: 2px;
+}
+
+/* Skip to main content link for screen readers */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: #000;
+  color: white;
+  padding: 8px;
+  text-decoration: none;
+  z-index: 100;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* Improve button disabled state */
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ============ MEDIA QUERIES ============ */
+
+@media (max-width: 1024px) {
+  .layout-wrapper {
+    flex-direction: column;
+    padding: 0;
+  }
+  
+  .sidebar {
+    width: 100%;
+    margin-bottom: 20px;
+  }
+  
+  .main-content {
+    width: 100%;
+  }
+  
+  .controls, .ticker-search-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .controls input, .controls select, #tickerSearchInput {
+    min-width: auto;
+    width: 100%;
+  }
+}
