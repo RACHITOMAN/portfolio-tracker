@@ -1,6 +1,7 @@
 // Global Variables
 const CACHE_DURATION = 4 * 60 * 60 * 1000;
 let transactions = [];
+let activeTickerFilter = null;
 let livePrices = {};
 let cashFlows = [];
 let portfolios = JSON.parse(localStorage.getItem('portfolios')) || [{ id: 'total', name: 'Total Portfolio', color: 0 }];
@@ -11,7 +12,6 @@ let sortState = {
   ticker: { column: 'symbol', direction: 'asc' },
   all: { column: 'symbol', direction: 'asc' }
 };
-
 // Portfolio Colors
 const PORTFOLIO_COLORS = {
   1: 'portfolio-1',
@@ -32,6 +32,188 @@ function debounce(func, wait) {
     clearTimeout(timeout);
     timeout = setTimeout(later, wait);
   };
+}
+function makeTickerClickable(symbol) {
+  return `<span class="clickable-ticker" onclick="filterByTicker('${symbol}')" style="cursor: pointer; color: #007BFF; text-decoration: underline; font-weight: bold;" title="Click to view all ${symbol} transactions">${symbol}</span>`;
+}
+function filterByTicker(symbol) {
+  activeTickerFilter = symbol;
+  showTickerModal(symbol);
+}
+function showTickerModal(symbol) {
+  const symbolTransactions = transactions.filter(t => t.symbol === symbol);
+  
+  if (symbolTransactions.length === 0) {
+    alert('No transactions found for ' + symbol);
+    return;
+  }
+  
+  const modalHTML = `
+    <div id="tickerModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;">
+      <div style="background: white; border-radius: 10px; padding: 20px; max-width: 90%; max-height: 90%; overflow: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #007BFF; padding-bottom: 10px;">
+          <h2 style="margin: 0; color: #007BFF;">${symbol} Transactions (${symbolTransactions.length})</h2>
+          <button onclick="closeTickerModal()" style="background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold;">✕ Close</button>
+        </div>
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="background: #f8f9fa;">
+              <th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Date</th>
+              <th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Type</th>
+              <th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Portfolio</th>
+              <th style="padding: 10px; text-align: right; border-bottom: 2px solid #dee2e6;">Shares</th>
+              <th style="padding: 10px; text-align: right; border-bottom: 2px solid #dee2e6;">Price</th>
+              <th style="padding: 10px; text-align: right; border-bottom: 2px solid #dee2e6;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${symbolTransactions.map(t => `
+              <tr style="border-bottom: 1px solid #dee2e6;">
+                <td style="padding: 10px;">${formatDateDDMMYYYY(t.date)}</td>
+                <td style="padding: 10px;"><span style="background: ${t.type === 'buy' ? '#28a745' : t.type === 'sell' ? '#dc3545' : '#ffc107'}; color: white; padding: 3px 8px; border-radius: 3px; font-size: 12px;">${t.type.toUpperCase()}</span></td>
+                <td style="padding: 10px;">${portfolios.find(p => p.id === t.portfolio)?.name || t.portfolio}</td>
+                <td style="padding: 10px; text-align: right;">${Math.abs(t.shares).toFixed(2)}</td>
+                <td style="padding: 10px; text-align: right;">$${t.price.toFixed(2)}</td>
+                <td style="padding: 10px; text-align: right; font-weight: bold;">$${(Math.abs(t.shares) * t.price).toFixed(2)}</td>
+              </tr>
+`).join('')}
+          </tbody>
+          <tfoot>
+            <tr style="background: #f8f9fa; font-weight: bold; border-top: 3px solid #007BFF;">
+              <td colspan="3" style="padding: 12px; text-align: right;">TOTALS:</td>
+              <td style="padding: 12px; text-align: right;">${symbolTransactions.reduce((sum, t) => sum + Math.abs(t.shares), 0).toFixed(2)}</td>
+              <td style="padding: 12px;"></td>
+              <td style="padding: 12px; text-align: right; color: #007BFF;">$${symbolTransactions.reduce((sum, t) => sum + (Math.abs(t.shares) * t.price), 0).toFixed(2)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  `;
+  
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+function closeTickerModal() {
+  const modal = document.getElementById('tickerModal');
+  if (modal) {
+    modal.remove();
+  }
+  activeTickerFilter = null;
+}
+function showEditModal(transactionIndex) {
+  const t = transactions[transactionIndex];
+  if (!t) return;
+  
+  const modalHTML = `
+    <div id="editModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;">
+      <div style="background: white; border-radius: 10px; padding: 30px; max-width: 500px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #007BFF; padding-bottom: 10px;">
+          <h2 style="margin: 0; color: #007BFF;">Edit Transaction</h2>
+          <button onclick="closeEditModal()" style="background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold;">✕</button>
+        </div>
+        <form id="editForm" style="display: flex; flex-direction: column; gap: 15px;">
+          <div>
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Type:</label>
+            <select id="editType" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+              <option value="buy" ${t.type === 'buy' ? 'selected' : ''}>Buy</option>
+              <option value="sell" ${t.type === 'sell' ? 'selected' : ''}>Sell</option>
+              <option value="dividend" ${t.type === 'dividend' ? 'selected' : ''}>Dividend</option>
+              <option value="premium" ${t.type === 'premium' ? 'selected' : ''}>Premium</option>
+            </select>
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Portfolio:</label>
+            <select id="editPortfolio" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+              ${portfolios.filter(p => p.id !== 'total').map(p => `<option value="${p.id}" ${t.portfolio === p.id ? 'selected' : ''}>${p.name}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Symbol:</label>
+            <input type="text" id="editSymbol" value="${t.symbol}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; text-transform: uppercase;">
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Shares:</label>
+            <input type="number" id="editShares" value="${Math.abs(t.shares)}" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Price:</label>
+            <input type="number" id="editPrice" value="${t.price}" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Date:</label>
+            <input type="date" id="editDate" value="${t.date}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+          </div>
+          <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <button type="button" onclick="saveEditedTransaction(${transactionIndex})" style="flex: 1; background: #28a745; color: white; border: none; padding: 12px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 16px;">💾 Save Changes</button>
+            <button type="button" onclick="closeEditModal()" style="flex: 1; background: #6c757d; color: white; border: none; padding: 12px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 16px;">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+function closeEditModal() {
+  const modal = document.getElementById('editModal');
+  if (modal) {
+    modal.remove();
+  }
+}
+function formatDateInput(input) {
+  let value = input.value.replace(/\D/g, ''); // Remove non-digits
+  
+  if (value.length >= 2) {
+    value = value.slice(0, 2) + '/' + value.slice(2);
+  }
+  if (value.length >= 5) {
+    value = value.slice(0, 5) + '/' + value.slice(5, 9);
+  }
+  
+  input.value = value;
+  
+  // Validate complete date
+  if (value.length === 10) {
+    const parts = value.split('/');
+    const day = parseInt(parts[0]);
+    const month = parseInt(parts[1]);
+    const year = parseInt(parts[2]);
+    
+    if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1900 || year > 2100) {
+      input.style.borderColor = 'red';
+    } else {
+      input.style.borderColor = '#ddd';
+    }
+  }
+}
+async function saveEditedTransaction(transactionIndex) {
+  const type = document.getElementById('editType').value;
+  const portfolio = document.getElementById('editPortfolio').value;
+  const symbol = document.getElementById('editSymbol').value.trim().toUpperCase();
+  const shares = parseFloat(document.getElementById('editShares').value);
+  const price = parseFloat(document.getElementById('editPrice').value);
+  const date = document.getElementById('editDate').value;
+  
+  if (!symbol || isNaN(shares) || isNaN(price) || !date) {
+    alert('Please fill in all required fields');
+    return;
+  }
+  
+  transactions[transactionIndex] = {
+    id: transactions[transactionIndex].id,
+    type,
+    portfolio,
+    symbol,
+    shares: type === 'sell' ? -Math.abs(shares) : Math.abs(shares),
+    price,
+    date,
+    premium_type: transactions[transactionIndex].premium_type
+  };
+  
+  await saveDataToSupabase();
+refreshPricesAndNames();
+closeEditModal();
+  alert('Transaction updated successfully!');
 }
 // ============ INITIALIZATION ============
 
@@ -586,6 +768,9 @@ function initializeTabs() {
   
   tabs.forEach(function(tab) {
     tab.addEventListener('click', function() {
+      if (tab.dataset.tab !== 'all') {
+  clearTickerFilter();
+}
       if (tab.id === 'importCsvBtn' || tab.id === 'refreshPricesBtn') {
         return;
       }
@@ -771,7 +956,39 @@ function sortTable(table, column, direction) {
 }
 
 // ============ TRANSACTIONS ============
-
+function convertDDMMYYYYtoYYYYMMDD(dateStr) {
+  // If already in YYYY-MM-DD format, return as is
+  if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    return dateStr;
+  }
+  
+  // Convert DD/MM/YYYY to YYYY-MM-DD
+  const parts = dateStr.split('/');
+  if (parts.length === 3) {
+    const day = parts[0].padStart(2, '0');
+    const month = parts[1].padStart(2, '0');
+    const year = parts[2];
+    return `${year}-${month}-${day}`;
+  }
+  
+  return dateStr;
+}
+function checkDuplicateTransaction(symbol, shares, date, type) {
+  const dateObj = new Date(date);
+  
+  const duplicates = transactions.filter(t => {
+    const tDate = new Date(t.date);
+    const daysDiff = Math.abs((dateObj - tDate) / (1000 * 60 * 60 * 24));
+    const sharesDiff = Math.abs(t.shares - shares);
+    
+    return t.symbol === symbol &&
+           t.type === type &&
+           daysDiff <= 1 && // Within 1 day
+           sharesDiff <= (shares * 0.1); // Within 10% of shares
+  });
+  
+  return duplicates;
+}
 async function addTransaction() {
   const type = document.getElementById('type').value;
   const portfolio = document.getElementById('portfolio').value;
@@ -791,7 +1008,20 @@ async function addTransaction() {
     return;
   }
   
-  const date = dateInput + 'T00:00:00Z';
+  const date = convertDDMMYYYYtoYYYYMMDD(dateInput) + 'T00:00:00Z';
+  
+  // Check for duplicates
+  const duplicates = checkDuplicateTransaction(symbol, shares, date, type);
+  if (duplicates.length > 0) {
+    const dup = duplicates[0];
+    const dupDate = new Date(dup.date).toLocaleDateString();
+    const message = `⚠️ Similar transaction found:\n\n${dup.symbol} - ${Math.abs(dup.shares)} shares @ $${dup.price}\nDate: ${dupDate}\nType: ${dup.type}\n\nAdd this transaction anyway?`;
+    
+    if (!confirm(message)) {
+      return;
+    }
+  }
+  
   const transaction = { 
     type: type, 
     portfolio: portfolio, 
@@ -1539,11 +1769,17 @@ function updateTables(symbolData, portfolioData, soldData) {
     tbody.innerHTML = '';
     
     if (portfolio === 'all') {
-  transactions.forEach(function(t, index) {
+  let filteredTransactions = transactions;
+  if (activeTickerFilter) {
+    filteredTransactions = transactions.filter(t => t.symbol === activeTickerFilter);
+  }
+  filteredTransactions.forEach(function(t, index) {
     const row = document.createElement('tr');
+    row.ondblclick = function() { showEditModal(index); };
+row.style.cursor = 'pointer';
+row.title = 'Double-click to edit';
     const portfolioName = portfolios.find(p => p.id === t.portfolio)?.name || t.portfolio.toUpperCase();
-    row.innerHTML = '<td><input type="checkbox" class="select-row" data-index="' + index + '"></td><td>' + t.type + '</td><td>' + portfolioName + '</td><td>' + t.symbol + '</td><td>' + t.shares.toFixed(2) + '</td><td>$' + t.price.toFixed(2) + '</td><td>' + formatDateDDMMYYYY(t.date) + '</td>';
-    tbody.appendChild(row);
+row.innerHTML = '<td><input type="checkbox" class="select-row" data-index="' + index + '"></td><td>' + t.type + '</td><td>' + portfolioName + '</td><td>' + makeTickerClickable(t.symbol) + '</td><td>' + t.shares.toFixed(2) + '</td><td>$' + t.price.toFixed(2) + '</td><td>' + formatDateDDMMYYYY(t.date) + '</td>';    tbody.appendChild(row);
   });
 }
     else if (portfolio === 'sold') {
@@ -1567,7 +1803,7 @@ function updateTables(symbolData, portfolioData, soldData) {
         const portfolioName = portfolios.find(p => p.id === data.portfolio)?.name || data.portfolio.toUpperCase();
         
         row.innerHTML = '<td><input type="checkbox" class="select-row"></td>' +
-          '<td>' + symbol + (data.isPremium ? ' (Premium)' : '') + '</td>' +
+'<td>' + makeTickerClickable(symbol) + (data.isPremium ? ' (Premium)' : '') + '</td>' +
           '<td>' + portfolioName + '</td>' +
           '<td>' + data.sharesSold.toFixed(2) + '</td>' +
           '<td>$' + data.avgBuyPrice.toFixed(2) + '</td>' +
@@ -1600,7 +1836,7 @@ function updateTables(symbolData, portfolioData, soldData) {
         }
 
         var portfolioPercent = (portfolioTotalValue > 0) ? (data.currentValue / portfolioTotalValue * 100).toFixed(2) : '0.00';
-        row.innerHTML = '<td><input type="checkbox" class="select-row"></td><td>' + symbol + '</td><td>' + (data.netShares || 0).toFixed(2) + '</td><td>$' + (data.avgCost || 0).toFixed(2) + '</td><td>$' + (data.currentPrice || 0).toFixed(2) + '</td><td>$' + (data.totalCost || 0).toFixed(2) + '</td><td>$' + (data.currentValue || 0).toFixed(2) + '</td><td>' + portfolioPercent + '%</td><td class="' + (data.gainLoss < 0 ? 'negative' : '') + '">$' + (data.gainLoss || 0).toFixed(2) + '</td><td class="' + ((data.gainLossPercent || 0) < 0 ? 'negative' : '') + '">' + (data.gainLossPercent || 0) + '%</td><td>' + (data.weightedDays < 90 ? 'N/A' : ((data.xirr || 0) * 100).toFixed(2) + '%') + '</td><td>' + Math.round(data.weightedDays || 0) + ' days</td><td>' + formatDateDDMMYYYY(data.firstDate) + '</td><td>' + formatDateDDMMYYYY(data.lastDate) + '</td>';
+row.innerHTML = '<td><input type="checkbox" class="select-row"></td><td>' + makeTickerClickable(symbol) + '</td><td>' + (data.netShares || 0).toFixed(2) + '</td><td>$' + (data.avgCost || 0).toFixed(2) + '</td><td>$' + (data.currentPrice || 0).toFixed(2) + '</td><td>$' + (data.totalCost || 0).toFixed(2) + '</td><td>$' + (data.currentValue || 0).toFixed(2) + '</td><td>' + portfolioPercent + '%</td><td class="' + (data.gainLoss < 0 ? 'negative' : '') + '">$' + (data.gainLoss || 0).toFixed(2) + '</td><td class="' + ((data.gainLossPercent || 0) < 0 ? 'negative' : '') + '">' + (data.gainLossPercent || 0) + '%</td><td>' + (data.weightedDays < 90 ? 'N/A' : ((data.xirr || 0) * 100).toFixed(2) + '%') + '</td><td>' + Math.round(data.weightedDays || 0) + ' days</td><td>' + formatDateDDMMYYYY(data.firstDate) + '</td><td>' + formatDateDDMMYYYY(data.lastDate) + '</td>';
         tbody.appendChild(row);
       }
     }
@@ -2249,6 +2485,13 @@ if (clearTickerBtn) {
   }
   
   updateCashFlowTable();
+}
+// Smart date input formatting
+const dateInput = document.getElementById('date');
+if (dateInput) {
+  dateInput.addEventListener('input', function() {
+    formatDateInput(this);
+  });
 }
 
 init();
