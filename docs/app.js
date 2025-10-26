@@ -12,6 +12,11 @@ let sortState = {
   ticker: { column: 'symbol', direction: 'asc' },
   all: { column: 'symbol', direction: 'asc' }
 };
+let transactionFilters = {
+  type: '',
+  portfolio: '',
+  symbol: ''
+};
 // Portfolio Colors
 const PORTFOLIO_COLORS = {
   1: 'portfolio-1',
@@ -185,6 +190,37 @@ function formatDateInput(input) {
       input.style.borderColor = '#ddd';
     }
   }
+}
+function applyTransactionFilters() {
+  transactionFilters.type = document.getElementById('filterType').value;
+  transactionFilters.portfolio = document.getElementById('filterPortfolio').value;
+  transactionFilters.symbol = document.getElementById('filterSymbol').value;
+  
+  refreshPricesAndNames();
+}
+
+function clearTransactionFilters() {
+  transactionFilters = {
+    type: '',
+    portfolio: '',
+    symbol: ''
+  };
+  
+  document.getElementById('filterType').value = '';
+  document.getElementById('filterPortfolio').value = '';
+  document.getElementById('filterSymbol').value = '';
+  
+  refreshPricesAndNames();
+}
+
+function populatePortfolioFilter() {
+  const filterPortfolio = document.getElementById('filterPortfolio');
+  if (!filterPortfolio) return;
+  
+  const userPortfolios = portfolios.filter(p => p.id !== 'total');
+  
+  filterPortfolio.innerHTML = '<option value="">All Portfolios</option>' +
+    userPortfolios.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
 }
 async function saveEditedTransaction(transactionIndex) {
   const type = document.getElementById('editType').value;
@@ -498,6 +534,18 @@ function formatDateDDMMYYYY(date) {
   
   return d.toLocaleDateString('en-GB');
 }
+function getPortfolioName(portfolioId) {
+  const portfolio = portfolios.find(p => p.id === portfolioId);
+  return portfolio ? portfolio.name : portfolioId;
+}
+
+function getPortfolioColorDot(portfolioId) {
+  const portfolio = portfolios.find(p => p.id === portfolioId);
+  if (!portfolio || portfolio.id === 'total') return '';
+  
+  const colorClass = `portfolio-color-${portfolio.color}`;
+  return `<span class="portfolio-indicator ${colorClass}"></span>`;
+}
 
 function calculateDaysHeld(startDate, endDate) {
   const start = new Date(startDate);
@@ -768,9 +816,6 @@ function initializeTabs() {
   
   tabs.forEach(function(tab) {
     tab.addEventListener('click', function() {
-      if (tab.dataset.tab !== 'all') {
-  clearTickerFilter();
-}
       if (tab.id === 'importCsvBtn' || tab.id === 'refreshPricesBtn') {
         return;
       }
@@ -1770,16 +1815,32 @@ function updateTables(symbolData, portfolioData, soldData) {
     
     if (portfolio === 'all') {
   let filteredTransactions = transactions;
+  
+  // Apply ticker modal filter (from clickable tickers)
   if (activeTickerFilter) {
-    filteredTransactions = transactions.filter(t => t.symbol === activeTickerFilter);
+    filteredTransactions = filteredTransactions.filter(t => t.symbol === activeTickerFilter);
+  }
+  
+  // Apply dropdown/search filters
+  if (transactionFilters.type) {
+    filteredTransactions = filteredTransactions.filter(t => t.type === transactionFilters.type);
+  }
+  if (transactionFilters.portfolio) {
+    filteredTransactions = filteredTransactions.filter(t => t.portfolio === transactionFilters.portfolio);
+  }
+  if (transactionFilters.symbol) {
+    filteredTransactions = filteredTransactions.filter(t => 
+      t.symbol.toLowerCase().includes(transactionFilters.symbol.toLowerCase())
+    );
   }
   filteredTransactions.forEach(function(t, index) {
     const row = document.createElement('tr');
     row.ondblclick = function() { showEditModal(index); };
 row.style.cursor = 'pointer';
 row.title = 'Double-click to edit';
-    const portfolioName = portfolios.find(p => p.id === t.portfolio)?.name || t.portfolio.toUpperCase();
-row.innerHTML = '<td><input type="checkbox" class="select-row" data-index="' + index + '"></td><td>' + t.type + '</td><td>' + portfolioName + '</td><td>' + makeTickerClickable(t.symbol) + '</td><td>' + t.shares.toFixed(2) + '</td><td>$' + t.price.toFixed(2) + '</td><td>' + formatDateDDMMYYYY(t.date) + '</td>';    tbody.appendChild(row);
+    const portfolioName = getPortfolioName(t.portfolio);
+const portfolioColor = getPortfolioColorDot(t.portfolio);
+row.innerHTML = '<td><input type="checkbox" class="select-row" data-index="' + index + '"></td><td>' + t.type.toUpperCase() + '</td><td>' + portfolioColor + portfolioName + '</td><td>' + makeTickerClickable(t.symbol) + '</td><td>' + t.shares.toFixed(2) + '</td><td>$' + t.price.toFixed(2) + '</td><td>' + formatDateDDMMYYYY(t.date) + '</td>';    tbody.appendChild(row);
   });
 }
     else if (portfolio === 'sold') {
@@ -1800,11 +1861,12 @@ row.innerHTML = '<td><input type="checkbox" class="select-row" data-index="' + i
         const currentPrice = livePrices[symbol] || 0;
         const unrealizedGain = currentPrice > 0 ? ((currentPrice - data.avgBuyPrice) * data.sharesSold) - data.realizedGain : 0;
         
-        const portfolioName = portfolios.find(p => p.id === data.portfolio)?.name || data.portfolio.toUpperCase();
+        const portfolioName = getPortfolioName(data.portfolio);
+const portfolioColor = getPortfolioColorDot(data.portfolio);
         
-        row.innerHTML = '<td><input type="checkbox" class="select-row"></td>' +
-'<td>' + makeTickerClickable(symbol) + (data.isPremium ? ' (Premium)' : '') + '</td>' +
-          '<td>' + portfolioName + '</td>' +
+       row.innerHTML = '<td><input type="checkbox" class="select-row"></td>' +
+          '<td>' + makeTickerClickable(symbol) + (data.isPremium ? ' (Premium)' : '') + '</td>' +
+          '<td>' + portfolioColor + portfolioName + '</td>' +
           '<td>' + data.sharesSold.toFixed(2) + '</td>' +
           '<td>$' + data.avgBuyPrice.toFixed(2) + '</td>' +
           '<td>$' + data.avgSellPrice.toFixed(2) + '</td>' +
@@ -2493,5 +2555,26 @@ if (dateInput) {
     formatDateInput(this);
   });
 }
+// Transaction filters
+const filterType = document.getElementById('filterType');
+const filterPortfolio = document.getElementById('filterPortfolio');
+const filterSymbol = document.getElementById('filterSymbol');
+const clearFiltersBtn = document.getElementById('clearFiltersBtn');
+
+if (filterType) {
+  filterType.addEventListener('change', applyTransactionFilters);
+}
+if (filterPortfolio) {
+  filterPortfolio.addEventListener('change', applyTransactionFilters);
+}
+if (filterSymbol) {
+  filterSymbol.addEventListener('input', debounce(applyTransactionFilters, 300));
+}
+if (clearFiltersBtn) {
+  clearFiltersBtn.addEventListener('click', clearTransactionFilters);
+}
+
+// Populate portfolio filter dropdown
+populatePortfolioFilter();
 
 init();

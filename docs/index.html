@@ -310,6 +310,27 @@ Type,Portfolio,Symbol,Shares,Price,Date
       </div>
 
       <div class="tab-content" id="all">
+        <h2>All Transactions</h2>
+        
+        <!-- Filter Controls -->
+        <div class="transaction-filters">
+          <select id="filterType">
+            <option value="">All Types</option>
+            <option value="buy">BUY</option>
+            <option value="sell">SELL</option>
+            <option value="dividend">DIVIDEND</option>
+            <option value="premium">PREMIUM</option>
+          </select>
+          
+          <select id="filterPortfolio">
+            <option value="">All Portfolios</option>
+          </select>
+          
+          <input type="text" id="filterSymbol" placeholder="Search symbol...">
+          
+          <button id="clearFiltersBtn" class="btn-secondary">Clear Filters</button>
+        </div>
+        
         <div class="table-responsive">
           <table id="allTable">
             <thead>
