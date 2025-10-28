@@ -249,8 +249,20 @@ async function init() {
   initializeTabs();
   initializeSortListeners();
   
-  await loadDataFromSupabase();
+  console.log('Before loadDataFromSupabase');
+  
+  try {
+    await loadDataFromSupabase();
+    console.log('After loadDataFromSupabase, transactions:', transactions.length);
+  } catch (error) {
+    console.error('Error loading data:', error);
+  }
+  
+  console.log('About to call refreshPricesAndNames, transactions:', transactions.length);
+  refreshPricesAndNames();
+  console.log('Called refreshPricesAndNames, globalSymbolData keys:', Object.keys(globalSymbolData).length);
 
+  
   // CSV Template Download
 const downloadTemplateBtn = document.getElementById('downloadTemplateBtn');
 if (downloadTemplateBtn) {
