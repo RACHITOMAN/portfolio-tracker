@@ -760,6 +760,9 @@ tr:hover {
   font-size: 0.9em;
   color: #555;
 }
+.tab[data-tab="dividends"] {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+}
 
 /* ============ ACCESSIBILITY - FOCUS STATES ============ */
 button:focus,
@@ -883,4 +886,118 @@ tbody tr:hover {
 .transaction-filters input[type="text"] {
   flex: 1;
   min-width: 200px;
+}
+/* Price mode radio buttons */
+input[type="radio"] {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+}
+
+#apiKeySection {
+  transition: opacity 0.3s;
+}
+
+#apiKeySection.hidden {
+  display: none;
+}
+/* Price mode radio buttons */
+input[type="radio"] {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+}
+#apiKeySection {
+  transition: opacity 0.3s;
+}
+#apiKeySection.hidden {
+  display: none;
+}
+
+/* Manual price checkbox and editing */
+.price-edit-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.price-editable {
+  background: #fff9e6;
+  border: 2px solid #667eea;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.price-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.price-input {
+  width: 80px;
+  padding: 4px 8px;
+  border: 2px solid #667eea;
+  border-radius: 4px;
+  font-size: 0.9em;
+  text-align: right;
+}
+
+#saveManualPricesBtn {
+  background: #28a745;
+  display: none;
+}
+
+#saveManualPricesBtn:hover {
+  background: #218838;
+}
+
+#saveManualPricesBtn.show {
+  display: inline-block;
+}
+/* Table styles */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+}
+
+th, td {
+  padding: 12px 8px;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+}
+/* Center align all table data except the first column (Symbol) */
+table td {
+  text-align: center;
+}
+
+/* Keep symbol column left-aligned since it's text */
+table td:first-child,
+table td:nth-child(2) {
+  text-align: left;
+}
+
+/* Center align table headers too */
+table th {
+  text-align: center;
+}
+
+/* Keep symbol header left-aligned */
+table th[data-sort="symbol"] {
+  text-align: left;
+}
+/* Center align checkbox column */
+table td:first-child,
+table th:first-child {
+  text-align: center;
+}
+/* Center align symbol column */
+table td:nth-child(2),
+table th[data-sort="symbol"] {
+  text-align: center;
 }

@@ -68,12 +68,32 @@
       <span class="close">&times;</span>
       <h2>⚙️ Settings</h2>
       
-      <h3>API Configuration</h3>
-      <p>Enter your TwelveData API key to fetch live stock prices.</p>
-      <p>Get your free API key at: <a href="https://twelvedata.com" target="_blank">twelvedata.com</a></p>
-      <input type="text" id="apiKeyInput" placeholder="Enter your API key">
-      <button id="saveApiKeyBtn" class="btn-primary">Save API Key</button>
-      <div id="apiKeyStatus"></div>
+      <h3>Price Data Source</h3>
+      <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="radio" name="priceMode" id="priceMode_api" value="api" checked>
+          <div>
+            <strong>Automatic (API)</strong>
+            <p style="margin: 5px 0 0 0; font-size: 0.9em; color: #666;">Fetch live prices automatically (requires API key)</p>
+          </div>
+        </label>
+        <label style="display: flex; align-items: center; gap: 10px; margin-top: 15px; cursor: pointer;">
+          <input type="radio" name="priceMode" id="priceMode_manual" value="manual">
+          <div>
+            <strong>Manual Entry</strong>
+            <p style="margin: 5px 0 0 0; font-size: 0.9em; color: #666;">Enter prices manually (no API key needed)</p>
+          </div>
+        </label>
+      </div>
+      
+      <div id="apiKeySection">
+        <h3>API Configuration</h3>
+        <p>Enter your TwelveData API key to fetch live stock prices.</p>
+        <p>Get your free API key at: <a href="https://twelvedata.com" target="_blank">twelvedata.com</a></p>
+        <input type="text" id="apiKeyInput" placeholder="Enter your API key">
+        <button id="saveApiKeyBtn" class="btn-primary">Save API Key</button>
+        <div id="apiKeyStatus"></div>
+      </div>
       
       <h3>Manage Portfolios</h3>
       <div id="portfolioList"></div>
@@ -151,6 +171,7 @@
         <button class="tab active" data-tab="total">🌎 Total Portfolio</button>
         <!-- Dynamic portfolio tabs will be inserted here -->
         <button class="tab" data-tab="sold">💰 Sold Positions</button>
+<button class="tab" data-tab="dividends">💎 Dividends</button>
         <button class="tab" data-tab="cashflow">💵 Cash Flow</button>
         <button class="tab" data-tab="ticker">🔍 Ticker Search</button>
         <button class="tab" data-tab="all">📋 All Transactions</button>
@@ -159,7 +180,6 @@
 <button id="downloadTemplateBtn">📋 Download Template</button>
 <button id="exportCsvBtn">📤 Export CSV</button>
 <button id="refreshPricesBtn">🔄 Refresh Prices</button>
-
 <input type="file" id="csvFileInput" accept=".csv,.xlsx" style="display: none;">
       </div>
 
@@ -172,14 +192,19 @@
         </select>
         
         <select id="premiumType" style="display: none;">
-          <option value="covered_call">Covered Call</option>
-          <option value="csp_expired">Cash-Secured Put (Expired)</option>
-          <option value="csp_assigned">Cash-Secured Put (Assigned)</option>
-        </select>
-        
-        <select id="portfolio">
-          <option value="">Select Portfolio</option>
-        </select>
+  <option value="covered_call">Covered Call</option>
+  <option value="csp_expired">Cash-Secured Put (Expired)</option>
+  <option value="csp_assigned">Cash-Secured Put (Assigned)</option>
+</select>
+
+<select id="dividendType" style="display: none;">
+  <option value="drip">DRIP (Reinvested)</option>
+  <option value="cash">Cash Dividend</option>
+</select>
+
+<select id="portfolio">
+  <option value="">Select Portfolio</option>
+</select>
         <input type="text" id="symbol" placeholder="Symbol">
         <input type="number" id="shares" placeholder="Shares/Amount" min="0" step="0.01">
         <input type="number" id="price" placeholder="Price" min="0" step="0.01">
@@ -192,24 +217,22 @@
       <div class="tab-content active" id="total">
         <div class="table-responsive">
           <table id="totalTable">
-            <thead>
-              <tr>
-                <th data-sort="select" style="width: 40px;"><input type="checkbox" class="select-all"></th>
-                <th data-sort="symbol">Symbol</th>
-                <th data-sort="shares">Shares</th>
-                <th data-sort="avgCost">Avg Cost</th>
-                <th data-sort="currentPrice">Current Price</th>
-                <th data-sort="totalCost">Total Cost</th>
-                <th data-sort="currentValue">Current Value</th>
-                <th data-sort="percentPortfolio">Portfolio %</th>
-                <th data-sort="gainLoss">Unrealized Gain/Loss</th>
-                <th data-sort="gainLossPercent">Gain/Loss %</th>
-                <th data-sort="xirr">XIRR</th>
-                <th data-sort="weightedDays" class="weighted-days-held">Weighted Avg Days Held</th>
-                <th data-sort="firstDate">First Purchase</th>
-                <th data-sort="lastDate">Last Entry</th>
-              </tr>
-            </thead>
+           <thead>
+  <tr>
+    <th data-sort="select" style="width: 40px;"><input type="checkbox" class="select-all"></th>
+    <th data-sort="symbol">Symbol</th>
+    <th data-sort="shares">Shares</th>
+    <th data-sort="avgCost">Avg Cost</th>
+    <th data-sort="currentPrice">Current Price</th>
+    <th data-sort="totalCost">Cost Basis</th>
+    <th data-sort="currentValue">Current Value</th>
+    <th data-sort="gainLoss">Unrealized Gain/Loss</th>
+    <th data-sort="gainLossPercent">Gain/Loss %</th>
+    <th data-sort="xirr">XIRR</th>
+    <th data-sort="weightedDays" class="weighted-days-held">Weighted Avg Days Held</th>
+    <th data-sort="percentPortfolio">Portfolio %</th>
+  </tr>
+</thead>
             <tbody></tbody>
           </table>
         </div>
@@ -308,6 +331,46 @@ Type,Portfolio,Symbol,Shares,Price,Date
           </table>
         </div>
       </div>
+      <div class="tab-content" id="dividends">
+  <div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border-radius: 8px; border-left: 4px solid #667eea;">
+    <h3 style="margin: 0 0 10px 0; color: #2c3e50;">💸 Dividend Income Summary</h3>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+      <div style="background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Total DRIP Income</div>
+        <div id="totalDripIncome" style="font-size: 1.5em; font-weight: 600; color: #28a745;">$0.00</div>
+      </div>
+      <div style="background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Total Cash Dividends</div>
+        <div id="totalCashDividends" style="font-size: 1.5em; font-weight: 600; color: #667eea;">$0.00</div>
+      </div>
+      <div style="background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Total Dividend Income</div>
+        <div id="totalDividendIncome" style="font-size: 1.5em; font-weight: 600; color: #764ba2;">$0.00</div>
+      </div>
+      <div style="background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Dividend Stocks</div>
+        <div id="dividendStocksCount" style="font-size: 1.5em; font-weight: 600; color: #2c3e50;">0</div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="table-responsive">
+    <table id="dividendsTable">
+      <thead>
+        <tr>
+          <th data-sort="symbol">Symbol</th>
+          <th data-sort="portfolio">Portfolio</th>
+          <th data-sort="type">Type</th>
+          <th data-sort="shares">Shares</th>
+          <th data-sort="amount">Amount</th>
+          <th data-sort="date">Date</th>
+          <th data-sort="yield">Yield on Cost</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
 
       <div class="tab-content" id="all">
         <h2>All Transactions</h2>

@@ -1,6 +1,8 @@
 // Global Variables
 const CACHE_DURATION = 4 * 60 * 60 * 1000;
 let transactions = [];
+let originalSidebarHTML = '';
+let globalSymbolData = {};  
 let activeTickerFilter = null;
 let livePrices = {};
 let cashFlows = [];
@@ -53,13 +55,91 @@ function showTickerModal(symbol) {
     return;
   }
   
+  // Get pre-calculated data from globalSymbolData
+  const holdingData = globalSymbolData[symbol] || {};
+  
+  const totalShares = holdingData.netShares || 0;
+  const avgCost = holdingData.avgCost || 0;
+  const currentPrice = getCurrentPrice(symbol) || 0;
+  const totalCost = holdingData.totalCost || 0;
+  const currentValue = holdingData.currentValue || 0;
+  const gainLoss = holdingData.gainLoss || 0;
+  const gainLossPercent = parseFloat(holdingData.gainLossPercent) || 0;
+  const xirrValue = ((holdingData.xirr || 0) * 100);
+  const weightedDays = holdingData.weightedDays || 0;
+  
+  // Get first and last dates
+  let firstDate = null;
+  let lastDate = null;
+  symbolTransactions.forEach(t => {
+    const transDate = new Date(t.date);
+    if (!firstDate || transDate < firstDate) firstDate = transDate;
+    if (!lastDate || transDate > lastDate) lastDate = transDate;
+  });
+  
   const modalHTML = `
     <div id="tickerModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;">
       <div style="background: white; border-radius: 10px; padding: 20px; max-width: 90%; max-height: 90%; overflow: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #007BFF; padding-bottom: 10px;">
-          <h2 style="margin: 0; color: #007BFF;">${symbol} Transactions (${symbolTransactions.length})</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #667eea; padding-bottom: 10px;">
+          <h2 style="margin: 0; color: #667eea;">${symbol} - Transaction Details</h2>
           <button onclick="closeTickerModal()" style="background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold;">✕ Close</button>
         </div>
+        
+        <!-- Summary Stats -->
+        <div style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border-radius: 8px; padding: 15px; margin-bottom: 20px; border-left: 4px solid #667eea;">
+          <h3 style="margin: 0 0 12px 0; color: #2c3e50; font-size: 1.05em;">📊 Summary</h3>
+          
+          <div style="display: grid; grid-template-columns: repeat(11, 1fr); gap: 8px;">
+            <div style="background: white; padding: 8px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <div style="color: #6c757d; font-size: 0.75em; margin-bottom: 3px; white-space: nowrap;">Total Shares</div>
+              <div style="font-size: 1em; font-weight: 600; color: #2c3e50;">${totalShares.toFixed(2)}</div>
+            </div>
+            <div style="background: white; padding: 8px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <div style="color: #6c757d; font-size: 0.75em; margin-bottom: 3px; white-space: nowrap;">Avg Cost</div>
+              <div style="font-size: 1em; font-weight: 600; color: #2c3e50;">$${avgCost.toFixed(2)}</div>
+            </div>
+            <div style="background: white; padding: 8px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <div style="color: #6c757d; font-size: 0.75em; margin-bottom: 3px; white-space: nowrap;">Current Price</div>
+              <div style="font-size: 1em; font-weight: 600; color: #667eea;">$${currentPrice.toFixed(2)}</div>
+            </div>
+            <div style="background: white; padding: 8px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <div style="color: #6c757d; font-size: 0.75em; margin-bottom: 3px; white-space: nowrap;">Cost Basis</div>
+              <div style="font-size: 1em; font-weight: 600; color: #2c3e50;">$${totalCost.toFixed(2)}</div>
+            </div>
+            <div style="background: white; padding: 8px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <div style="color: #6c757d; font-size: 0.75em; margin-bottom: 3px; white-space: nowrap;">Current Value</div>
+              <div style="font-size: 1em; font-weight: 600; color: #2c3e50;">$${currentValue.toFixed(2)}</div>
+            </div>
+            <div style="background: white; padding: 8px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <div style="color: #6c757d; font-size: 0.75em; margin-bottom: 3px; white-space: nowrap;">Gain/Loss</div>
+              <div style="font-size: 1em; font-weight: 600; color: ${gainLoss >= 0 ? '#28a745' : '#dc3545'};">$${gainLoss.toFixed(2)}</div>
+              <div style="font-size: 0.8em; font-weight: 600; color: ${gainLoss >= 0 ? '#28a745' : '#dc3545'};">(${gainLossPercent.toFixed(2)}%)</div>
+            </div>
+            <div style="background: white; padding: 8px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <div style="color: #6c757d; font-size: 0.75em; margin-bottom: 3px; white-space: nowrap;">XIRR</div>
+              <div style="font-size: 1em; font-weight: 600; color: #667eea;">${weightedDays < 90 ? 'N/A' : xirrValue.toFixed(2) + '%'}</div>
+            </div>
+            <div style="background: white; padding: 8px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <div style="color: #6c757d; font-size: 0.75em; margin-bottom: 3px; white-space: nowrap;">Days Held</div>
+              <div style="font-size: 1em; font-weight: 600; color: #2c3e50;">${Math.round(weightedDays)}</div>
+            </div>
+            <div style="background: white; padding: 8px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <div style="color: #6c757d; font-size: 0.75em; margin-bottom: 3px; white-space: nowrap;">First Buy</div>
+              <div style="font-size: 1em; font-weight: 600; color: #2c3e50;">${firstDate ? formatDateDDMMYYYY(firstDate) : 'N/A'}</div>
+            </div>
+            <div style="background: white; padding: 8px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <div style="color: #6c757d; font-size: 0.75em; margin-bottom: 3px; white-space: nowrap;">Last Entry</div>
+              <div style="font-size: 1em; font-weight: 600; color: #2c3e50;">${lastDate ? formatDateDDMMYYYY(lastDate) : 'N/A'}</div>
+            </div>
+            <div style="background: white; padding: 8px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <div style="color: #6c757d; font-size: 0.75em; margin-bottom: 3px; white-space: nowrap;">Transactions</div>
+              <div style="font-size: 1em; font-weight: 600; color: #667eea;">${symbolTransactions.length}</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Transaction Table -->
+        <h3 style="margin: 20px 0 10px 0; color: #2c3e50;">📝 All Transactions</h3>
         <table style="width: 100%; border-collapse: collapse;">
           <thead>
             <tr style="background: #f8f9fa;">
@@ -73,25 +153,28 @@ function showTickerModal(symbol) {
           </thead>
           <tbody>
             ${symbolTransactions.map(t => `
-              <tr style="border-bottom: 1px solid #dee2e6;">
+              <tr style="border-bottom: 1px solid #dee2e6; cursor: pointer;" ondblclick="editTransactionFromModal(${t.id})" title="Double-click to edit">
                 <td style="padding: 10px;">${formatDateDDMMYYYY(t.date)}</td>
                 <td style="padding: 10px;"><span style="background: ${t.type === 'buy' ? '#28a745' : t.type === 'sell' ? '#dc3545' : '#ffc107'}; color: white; padding: 3px 8px; border-radius: 3px; font-size: 12px;">${t.type.toUpperCase()}</span></td>
                 <td style="padding: 10px;">${portfolios.find(p => p.id === t.portfolio)?.name || t.portfolio}</td>
                 <td style="padding: 10px; text-align: right;">${Math.abs(t.shares).toFixed(2)}</td>
                 <td style="padding: 10px; text-align: right;">$${t.price.toFixed(2)}</td>
-                <td style="padding: 10px; text-align: right; font-weight: bold;">$${(Math.abs(t.shares) * t.price).toFixed(2)}</td>
-              </tr>
+<td style="padding: 10px; text-align: right; font-weight: bold; color: ${t.type === 'dividend' && t.shares === 0 ? '#dc3545' : 'inherit'};">
+  ${t.type === 'dividend' && t.shares === 0 ? '-$' + t.price.toFixed(2) : '$' + (Math.abs(t.shares) * t.price).toFixed(2)}
+</td>        
+   </tr>
 `).join('')}
           </tbody>
-          <tfoot>
-            <tr style="background: #f8f9fa; font-weight: bold; border-top: 3px solid #007BFF;">
-              <td colspan="3" style="padding: 12px; text-align: right;">TOTALS:</td>
-              <td style="padding: 12px; text-align: right;">${symbolTransactions.reduce((sum, t) => sum + Math.abs(t.shares), 0).toFixed(2)}</td>
-              <td style="padding: 12px;"></td>
-              <td style="padding: 12px; text-align: right; color: #007BFF;">$${symbolTransactions.reduce((sum, t) => sum + (Math.abs(t.shares) * t.price), 0).toFixed(2)}</td>
-            </tr>
-          </tfoot>
+<tfoot>
+  <tr style="background: #f8f9fa; font-weight: bold; border-top: 3px solid #667eea;">
+    <td colspan="3" style="padding: 12px; text-align: right;">NET INVESTMENT:</td>
+    <td style="padding: 12px; text-align: right;">${symbolTransactions.filter(t => t.type !== 'dividend' || t.shares > 0).reduce((sum, t) => sum + Math.abs(t.shares), 0).toFixed(2)}</td>
+    <td style="padding: 12px;"></td>
+    <td style="padding: 12px; text-align: right; color: #667eea;">$${totalCost.toFixed(2)}</td>
+  </tr>
+</tfoot>
         </table>
+        <p style="margin-top: 15px; color: #6c757d; font-size: 0.9em; text-align: center;">💡 Tip: Double-click any transaction to edit it</p>
       </div>
     </div>
   `;
@@ -104,6 +187,69 @@ function closeTickerModal() {
     modal.remove();
   }
   activeTickerFilter = null;
+}
+function editTransactionFromModal(transactionId) {
+  // Close the modal first
+  closeTickerModal();
+  
+  // Switch to "All Transactions" tab
+  const allTransactionsTab = document.querySelector('[data-tab="all"]');
+  
+  if (allTransactionsTab) {
+    allTransactionsTab.click();
+  }
+  
+  // Find the actual index in transactions array
+  const transactionIndex = transactions.findIndex(t => t.id === transactionId);
+  
+  if (transactionIndex === -1) {
+    alert('Transaction not found');
+    return;
+  }
+  
+  // Wait for tab to switch, then trigger edit
+  setTimeout(() => {
+    showEditModal(transactionIndex);
+  }, 300);
+}
+function convertToDateInputFormat(dateValue) {
+  if (!dateValue) return '';
+  
+  let dateObj;
+  
+  // Handle DD/MM/YYYY format
+  if (typeof dateValue === 'string' && dateValue.includes('/')) {
+    const parts = dateValue.split('/');
+    if (parts.length === 3) {
+      const day = parts[0].padStart(2, '0');
+      const month = parts[1].padStart(2, '0');
+      const year = parts[2];
+      return `${year}-${month}-${day}`; // Return yyyy-MM-dd
+    }
+  }
+  
+  // Handle ISO format (2023-05-22T00:00:00+00:00)
+  if (typeof dateValue === 'string' && dateValue.includes('T')) {
+    dateObj = new Date(dateValue);
+  }
+  // Handle Date object
+  else if (dateValue instanceof Date) {
+    dateObj = dateValue;
+  }
+  // Try generic parsing
+  else {
+    dateObj = new Date(dateValue);
+  }
+  
+  // Return yyyy-MM-dd format
+  if (dateObj && !isNaN(dateObj.getTime())) {
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  return '';
 }
 function showEditModal(transactionIndex) {
   const t = transactions[transactionIndex];
@@ -146,7 +292,7 @@ function showEditModal(transactionIndex) {
           </div>
           <div>
             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Date:</label>
-            <input type="date" id="editDate" value="${t.date}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+<input type="date" id="editDate" value="${convertToDateInputFormat(t.date)}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
           </div>
           <div style="display: flex; gap: 10px; margin-top: 10px;">
             <button type="button" onclick="saveEditedTransaction(${transactionIndex})" style="flex: 1; background: #28a745; color: white; border: none; padding: 12px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 16px;">💾 Save Changes</button>
@@ -346,24 +492,22 @@ function updatePortfolioTabs() {
     content.innerHTML = `
       <div class="table-responsive">
         <table id="${portfolio.id}Table">
-          <thead>
-            <tr>
-              <th data-sort="select" style="width: 40px;"><input type="checkbox" class="select-all"></th>
-              <th data-sort="symbol">Symbol</th>
-              <th data-sort="shares">Shares</th>
-              <th data-sort="avgCost">Avg Cost</th>
-              <th data-sort="currentPrice">Current Price</th>
-              <th data-sort="totalCost">Total Cost</th>
-              <th data-sort="currentValue">Current Value</th>
-              <th data-sort="percentPortfolio">Portfolio %</th>
-              <th data-sort="gainLoss">Unrealized Gain/Loss</th>
-              <th data-sort="gainLossPercent">Gain/Loss %</th>
-              <th data-sort="xirr">XIRR</th>
-              <th data-sort="weightedDays" class="weighted-days-held">Weighted Avg Days Held</th>
-              <th data-sort="firstDate">First Purchase</th>
-              <th data-sort="lastDate">Last Entry</th>
-            </tr>
-          </thead>
+      <thead>
+  <tr>
+    <th data-sort="select" style="width: 40px;"><input type="checkbox" class="select-all"></th>
+    <th data-sort="symbol">Symbol</th>
+    <th data-sort="shares">Shares</th>
+    <th data-sort="avgCost">Avg Cost</th>
+    <th data-sort="currentPrice">Current Price</th>
+    <th data-sort="totalCost">Cost Basis</th>
+    <th data-sort="currentValue">Current Value</th>
+    <th data-sort="gainLoss">Unrealized Gain/Loss</th>
+    <th data-sort="gainLossPercent">Gain/Loss %</th>
+    <th data-sort="xirr">XIRR</th>
+    <th data-sort="weightedDays" class="weighted-days-held">Weighted Avg Days Held</th>
+    <th data-sort="percentPortfolio">Portfolio %</th>
+  </tr>
+</thead>
           <tbody></tbody>
         </table>
       </div>
@@ -557,15 +701,33 @@ function calculateDaysHeld(startDate, endDate) {
 // ============ VALIDATION ============
 
 function isValidTransaction(t) {
-  if (!t || !t.symbol || !t.shares || isNaN(new Date(t.date).getTime())) {
+  if (!t || !t.symbol || isNaN(new Date(t.date).getTime())) {
     return false;
   }
-  if (t.type === 'dividend' && t.price === 0) {
+  
+  // Allow 0 shares for cash dividends
+  const isCashDividend = t.type === 'dividend' && t.shares === 0;
+  
+  if (!isCashDividend && (!t.shares || t.shares <= 0)) {
+    return false;
+  }
+  
+  // DRIP dividends have price = 0
+  if (t.type === 'dividend' && t.shares > 0 && t.price === 0) {
     return true;
   }
+  
+  // Cash dividends need a positive price (dividend amount)
+  if (isCashDividend && t.price > 0) {
+    return true;
+  }
+  
+  // Premiums are always valid (can have any price)
   if (t.type === 'premium') {
     return true;
   }
+  
+  // Buy/Sell need valid price
   return t.price && t.price > 0;
 }
 
@@ -692,14 +854,15 @@ async function loadDataFromSupabase() {
         }
         
         return {
-          type: t.type,
-          portfolio: t.portfolio,
-          symbol: t.symbol,
-          shares: parseFloat(t.shares),
-          price: parseFloat(t.price),
-          date: formattedDate,
-          premium_type: t.premium_type || null
-        };
+  id: t.id,  // <-- ADD THIS LINE
+  type: t.type,
+  portfolio: t.portfolio,
+  symbol: t.symbol,
+  shares: parseFloat(t.shares),
+  price: parseFloat(t.price),
+  date: formattedDate,
+  premium_type: t.premium_type || null
+};
       });
       
       // DEBUG: Check for problematic dates
@@ -874,7 +1037,25 @@ function initializeTabs() {
           if (card) card.style.display = 'none';
         });
       }
-      
+    // Update dividends table when switching to dividends tab
+if (tab.dataset.tab === 'dividends') {
+  console.log('Dividends tab clicked - updating table');
+  
+  // Save original sidebar HTML if not saved yet
+  const portfolioSummary = document.querySelector('.sidebar .portfolio-summary');
+  if (portfolioSummary && !originalSidebarHTML) {
+    originalSidebarHTML = portfolioSummary.innerHTML;
+  }
+  
+  updateDividendsTable('total');
+  updateDividendsSidebar();
+} else {
+  // Restore original sidebar for non-dividend tabs
+  const portfolioSummary = document.querySelector('.sidebar .portfolio-summary');
+  if (portfolioSummary && originalSidebarHTML) {
+    portfolioSummary.innerHTML = originalSidebarHTML;
+  }
+}
       refreshPricesAndNames();
     });
   });
@@ -1043,14 +1224,34 @@ async function addTransaction() {
   const price = priceInput === '' ? 0 : parseFloat(priceInput);
   const dateInput = document.getElementById('date').value;
   
-  if (!symbol || isNaN(shares) || !dateInput || !portfolio) {
-    alert('Please fill in symbol, shares, portfolio, and date');
+  // Special handling for cash dividends
+  const isCashDividend = type === 'dividend' && shares === 0;
+  
+  if (!symbol || !dateInput || !portfolio) {
+    alert('Please fill in symbol, portfolio, and date');
     return;
   }
   
-  if (type !== 'premium' && type !== 'dividend' && (isNaN(price) || price <= 0)) {
-    alert('Please enter a valid price');
+  // Validate shares (allow 0 for cash dividends)
+  if (!isCashDividend && (isNaN(shares) || shares <= 0)) {
+    alert('Please enter valid shares');
     return;
+  }
+  
+  // Validate price (different rules for different types)
+  if (type === 'dividend') {
+    // DRIP or Cash dividend
+    if (isCashDividend && (isNaN(price) || price <= 0)) {
+      alert('Please enter dividend amount');
+      return;
+    }
+    // DRIP dividends have price = 0, which is OK
+  } else if (type !== 'premium') {
+    // Buy/Sell require valid price
+    if (isNaN(price) || price <= 0) {
+      alert('Please enter a valid price');
+      return;
+    }
   }
   
   const date = convertDDMMYYYYtoYYYYMMDD(dateInput) + 'T00:00:00Z';
@@ -1599,8 +1800,196 @@ function clearTickerSearch() {
 
 // ============ REFRESH AND UPDATE ============
 
+function updateDividendsTable(portfolioFilter = 'total') {
+  console.log('📊 Updating Dividends Table for portfolio:', portfolioFilter);
+  
+  let dividendTransactions = transactions.filter(t => t.type === 'dividend');
+  
+  // Filter by portfolio if not 'total'
+  if (portfolioFilter !== 'total') {
+    dividendTransactions = dividendTransactions.filter(t => t.portfolio === portfolioFilter);
+  }
+  
+  console.log('Found dividend transactions:', dividendTransactions);
+  
+  if (dividendTransactions.length === 0) {
+    document.getElementById('totalDripIncome').textContent = '$0.00';
+    document.getElementById('totalCashDividends').textContent = '$0.00';
+    document.getElementById('totalDividendIncome').textContent = '$0.00';
+    document.getElementById('dividendStocksCount').textContent = '0';
+    
+    const tbody = document.querySelector('#dividendsTable tbody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px; color: #6c757d;">No dividend transactions found</td></tr>';
+    return;
+  }
+  
+  // Group dividends by symbol
+  const dividendsBySymbol = {};
+  
+  dividendTransactions.forEach(t => {
+    if (!dividendsBySymbol[t.symbol]) {
+      dividendsBySymbol[t.symbol] = {
+        symbol: t.symbol,
+        portfolio: t.portfolio,
+        dripShares: 0,
+        dripValue: 0,
+        cashAmount: 0,
+        totalAmount: 0,
+        count: 0,
+        firstDate: t.date,
+        lastDate: t.date
+      };
+    }
+    
+    const data = dividendsBySymbol[t.symbol];
+    data.count++;
+    
+    if (t.shares > 0) {
+      // DRIP dividend
+      data.dripShares += t.shares;
+      const currentPrice = livePrices[t.symbol] || 0;
+      data.dripValue += t.shares * currentPrice;
+    } else {
+      // Cash dividend
+      data.cashAmount += t.price;
+    }
+    
+    // Track date range
+    if (new Date(t.date) < new Date(data.firstDate)) data.firstDate = t.date;
+    if (new Date(t.date) > new Date(data.lastDate)) data.lastDate = t.date;
+  });
+  
+  // Calculate grand totals
+  let totalDrip = 0;
+  let totalCash = 0;
+  
+  Object.values(dividendsBySymbol).forEach(data => {
+    data.totalAmount = data.dripValue + data.cashAmount;
+    totalDrip += data.dripValue;
+    totalCash += data.cashAmount;
+  });
+  
+  const totalIncome = totalDrip + totalCash;
+  
+  // Update summary cards
+  document.getElementById('totalDripIncome').textContent = '$' + totalDrip.toFixed(2);
+  document.getElementById('totalCashDividends').textContent = '$' + totalCash.toFixed(2);
+  document.getElementById('totalDividendIncome').textContent = '$' + totalIncome.toFixed(2);
+  document.getElementById('dividendStocksCount').textContent = Object.keys(dividendsBySymbol).length;
+  
+  // Populate table
+  const tbody = document.querySelector('#dividendsTable tbody');
+  tbody.innerHTML = '';
+  
+  // Sort by symbol alphabetically
+  const sortedData = Object.values(dividendsBySymbol).sort((a, b) => a.symbol.localeCompare(b.symbol));
+  
+  sortedData.forEach(data => {
+    const row = document.createElement('tr');
+    const portfolioName = getPortfolioName(data.portfolio);
+    const portfolioColor = getPortfolioColorDot(data.portfolio);
+    
+    // Calculate yield on cost
+    const holding = globalSymbolData[data.symbol];
+    const yieldOnCost = holding && holding.totalCost > 0 ? ((data.totalAmount / holding.totalCost) * 100) : 0;
+    
+    // Type badges
+    let typeBadges = '';
+    if (data.dripShares > 0) {
+      typeBadges += '<span style="background: #28a745; color: white; padding: 3px 8px; border-radius: 3px; font-size: 12px; margin-right: 5px;">DRIP</span>';
+    }
+    if (data.cashAmount > 0) {
+      typeBadges += '<span style="background: #667eea; color: white; padding: 3px 8px; border-radius: 3px; font-size: 12px;">CASH</span>';
+    }
+    
+    row.innerHTML = `
+      <td>${makeTickerClickable(data.symbol)}</td>
+      <td>${portfolioColor}${portfolioName}</td>
+      <td>${typeBadges}</td>
+      <td>${data.dripShares > 0 ? data.dripShares.toFixed(4) : '-'}</td>
+      <td style="font-weight: 600; color: #667eea;">$${data.totalAmount.toFixed(2)}</td>
+      <td>${formatDateDDMMYYYY(data.firstDate)} - ${formatDateDDMMYYYY(data.lastDate)}</td>
+      <td>${yieldOnCost.toFixed(2)}%</td>
+    `;
+    
+    tbody.appendChild(row);
+  });
+}
+function updateDividendsSidebar() {
+  const sidebar = document.querySelector('.sidebar .portfolio-summary');
+  if (!sidebar) return;
+  
+  // Get all dividend transactions
+  const dividendTransactions = transactions.filter(t => t.type === 'dividend');
+  
+  // Group by portfolio
+  const dividendsByPortfolio = {};
+  
+  portfolios.filter(p => p.id !== 'total').forEach(p => {
+    dividendsByPortfolio[p.id] = {
+      name: p.name,
+      dripValue: 0,
+      cashAmount: 0,
+      total: 0,
+      count: 0
+    };
+  });
+  
+  dividendTransactions.forEach(t => {
+    if (!dividendsByPortfolio[t.portfolio]) return;
+    
+    const data = dividendsByPortfolio[t.portfolio];
+    data.count++;
+    
+    if (t.shares > 0) {
+      // DRIP
+      const currentPrice = livePrices[t.symbol] || 0;
+      data.dripValue += t.shares * currentPrice;
+    } else {
+      // Cash
+      data.cashAmount += t.price;
+    }
+    
+    data.total = data.dripValue + data.cashAmount;
+  });
+  
+  // Calculate totals
+  const totalDividends = Object.values(dividendsByPortfolio).reduce((sum, p) => sum + p.total, 0);
+  
+  // Build sidebar HTML with proper card structure
+  let sidebarHTML = '';
+  
+  // Total Dividends Card
+  sidebarHTML += `
+    <div class="summary-card">
+      <h3>Total Dividends</h3>
+      <div class="value">$${totalDividends.toFixed(2)}</div>
+    </div>
+  `;
+  
+  // Per portfolio cards
+  Object.entries(dividendsByPortfolio).forEach(([id, data]) => {
+    if (data.total === 0) return; // Skip portfolios with no dividends
+    
+    const percentage = totalDividends > 0 ? ((data.total / totalDividends) * 100).toFixed(1) : 0;
+    
+    sidebarHTML += `
+      <div class="summary-card">
+        <h3>${data.name}</h3>
+        <div class="value">$${data.total.toFixed(2)}</div>
+        <div class="change">${percentage}% of total</div>
+        <div style="font-size: 0.8em; color: #6c757d; margin-top: 8px; line-height: 1.5;">
+          💚 DRIP: $${data.dripValue.toFixed(2)}<br>
+          💵 Cash: $${data.cashAmount.toFixed(2)}
+        </div>
+      </div>
+    `;
+  });
+  
+  sidebar.innerHTML = sidebarHTML;
+}
 function refreshPricesAndNames() {
-  const symbolData = {};
+  globalSymbolData = {};  // ← ADD THIS LINE TO RESET THE DATA
   const portfolioHoldings = {};
   
   // Initialize portfolio holdings counters
@@ -1610,8 +1999,8 @@ function refreshPricesAndNames() {
   
   transactions.forEach(function(t) {
     if (!isValidTransaction(t)) return;
-    if (!symbolData[t.symbol]) {
-      symbolData[t.symbol] = { 
+    if (!globalSymbolData[t.symbol]) {
+      globalSymbolData[t.symbol] = { 
         buys: 0,
         sells: 0, 
         totalCost: 0, 
@@ -1622,21 +2011,28 @@ function refreshPricesAndNames() {
     }
     
     if (t.type === 'buy' || t.type === 'dividend' || t.type === 'premium') {
-      if (t.type === 'buy' || t.type === 'dividend') {
-        symbolData[t.symbol].buys += t.shares;
+      // Add shares for buys and DRIP dividends
+      if (t.type === 'buy' || (t.type === 'dividend' && t.shares > 0)) {
+        globalSymbolData[t.symbol].buys += t.shares;
       }
       
+      // Add cost for buys only (DRIP is $0 cost)
       if (t.type === 'buy') {
-        symbolData[t.symbol].totalCost += t.shares * t.price;
+        globalSymbolData[t.symbol].totalCost += t.shares * t.price;
       }
       
-      symbolData[t.symbol].portfolio = t.portfolio;
+      // Subtract cash dividends from cost basis
+      if (t.type === 'dividend' && t.shares === 0 && t.price > 0) {
+        globalSymbolData[t.symbol].totalCost -= t.price;
+      }
+      
+      globalSymbolData[t.symbol].portfolio = t.portfolio;
     } else if (t.type === 'sell') {
-      symbolData[t.symbol].sells += t.shares;
+      globalSymbolData[t.symbol].sells += t.shares;
     }
     
-    if (t.date < symbolData[t.symbol].firstDate) symbolData[t.symbol].firstDate = t.date;
-    if (t.date > symbolData[t.symbol].lastDate) symbolData[t.symbol].lastDate = t.date;
+    if (t.date < globalSymbolData[t.symbol].firstDate) globalSymbolData[t.symbol].firstDate = t.date;
+    if (t.date > globalSymbolData[t.symbol].lastDate) globalSymbolData[t.symbol].lastDate = t.date;
   });
 
   const portfolioData = { totalValue: 0, totalCost: 0 };
@@ -1645,10 +2041,10 @@ function refreshPricesAndNames() {
     portfolioData[p.id] = 0;
   });
   
-  for (const symbol in symbolData) {
-    const netShares = symbolData[symbol].buys - symbolData[symbol].sells;
+  for (const symbol in globalSymbolData) {
+    const netShares = globalSymbolData[symbol].buys - globalSymbolData[symbol].sells;
     if (netShares > 0.001) {
-      let baseCost = symbolData[symbol].totalCost;
+      let baseCost = globalSymbolData[symbol].totalCost;
       
       const coveredCallPremiums = transactions.filter(function(t) {
         return t.symbol === symbol && 
@@ -1668,19 +2064,19 @@ function refreshPricesAndNames() {
       
       const adjustedTotalCost = baseCost - coveredCallPremiums - cspAssignedPremiums;
       
-      const avgCost = symbolData[symbol].buys > 0 ? adjustedTotalCost / symbolData[symbol].buys : 0;
+      const avgCost = globalSymbolData[symbol].buys > 0 ? adjustedTotalCost / globalSymbolData[symbol].buys : 0;
       const currentPrice = livePrices[symbol] || 0;
       const currentValue = netShares * currentPrice;
       const totalCostForHolding = netShares * avgCost;
       
-      symbolData[symbol].netShares = netShares;
-      symbolData[symbol].avgCost = avgCost;
-      symbolData[symbol].currentPrice = currentPrice;
-      symbolData[symbol].currentValue = currentValue;
-      symbolData[symbol].totalCost = totalCostForHolding;
-      symbolData[symbol].gainLoss = currentValue - totalCostForHolding;
-      symbolData[symbol].gainLossPercent = totalCostForHolding ? (symbolData[symbol].gainLoss / totalCostForHolding * 100).toFixed(2) : 0;
-      symbolData[symbol].xirr = calculateXIRRForSymbol(symbol, transactions, livePrices);
+      globalSymbolData[symbol].netShares = netShares;
+      globalSymbolData[symbol].avgCost = avgCost;
+      globalSymbolData[symbol].currentPrice = currentPrice;
+      globalSymbolData[symbol].currentValue = currentValue;
+      globalSymbolData[symbol].totalCost = totalCostForHolding;
+      globalSymbolData[symbol].gainLoss = currentValue - totalCostForHolding;
+      globalSymbolData[symbol].gainLossPercent = totalCostForHolding ? (globalSymbolData[symbol].gainLoss / totalCostForHolding * 100).toFixed(2) : 0;
+      globalSymbolData[symbol].xirr = calculateXIRRForSymbol(symbol, transactions, livePrices);
       
       const buyTxns = transactions.filter(function(t) {
         return t.symbol === symbol && (t.type === 'buy' || t.type === 'dividend');
@@ -1688,12 +2084,12 @@ function refreshPricesAndNames() {
       const totalBuyShares = buyTxns.reduce(function(sum, t) {
         return sum + t.shares;
       }, 0);
-      symbolData[symbol].weightedDays = totalBuyShares > 0 ? buyTxns.reduce(function(sum, t) {
+      globalSymbolData[symbol].weightedDays = totalBuyShares > 0 ? buyTxns.reduce(function(sum, t) {
         var days = calculateDaysHeld(t.date);
         return sum + t.shares * days;
       }, 0) / totalBuyShares : 0;
 
-      const portfolio = symbolData[symbol].portfolio;
+      const portfolio = globalSymbolData[symbol].portfolio;
       if (portfolioHoldings[portfolio]) {
         portfolioHoldings[portfolio][symbol] = true;
       }
@@ -1785,14 +2181,15 @@ function refreshPricesAndNames() {
     }
   });
 
-  updateTables(symbolData, portfolioData, soldData);
+  updateTables(globalSymbolData, portfolioData, soldData);
   const activeTab = document.querySelector('.tab.active');
   const currentPortfolio = activeTab ? activeTab.dataset.tab : 'total';
   const portfolioFilter = ['total', ...portfolios.filter(p => p.id !== 'total').map(p => p.id)].includes(currentPortfolio) ? currentPortfolio : 'total';
  
-  updateSummary(symbolData, portfolioData, portfolioFilter, soldData);
+  updateSummary(globalSymbolData, portfolioData, portfolioFilter, soldData);
   updateCashFlowTable();
-  }
+  updateDividendsTable(); // ← ADD THIS LINE
+}
 
 function updateTables(symbolData, portfolioData, soldData) {
   const tables = {
@@ -1834,14 +2231,17 @@ function updateTables(symbolData, portfolioData, soldData) {
     );
   }
   filteredTransactions.forEach(function(t, index) {
-    const row = document.createElement('tr');
-    row.ondblclick = function() { showEditModal(index); };
-row.style.cursor = 'pointer';
-row.title = 'Double-click to edit';
-    const portfolioName = getPortfolioName(t.portfolio);
-const portfolioColor = getPortfolioColorDot(t.portfolio);
-row.innerHTML = '<td><input type="checkbox" class="select-row" data-index="' + index + '"></td><td>' + t.type.toUpperCase() + '</td><td>' + portfolioColor + portfolioName + '</td><td>' + makeTickerClickable(t.symbol) + '</td><td>' + t.shares.toFixed(2) + '</td><td>$' + t.price.toFixed(2) + '</td><td>' + formatDateDDMMYYYY(t.date) + '</td>';    tbody.appendChild(row);
-  });
+  // Find the actual index in the main transactions array
+  const actualIndex = transactions.findIndex(tx => tx.id === t.id);  
+  const row = document.createElement('tr');
+  row.ondblclick = function() { showEditModal(actualIndex); };
+  row.style.cursor = 'pointer';
+  row.title = 'Double-click to edit';
+  const portfolioName = getPortfolioName(t.portfolio);
+  const portfolioColor = getPortfolioColorDot(t.portfolio);
+  row.innerHTML = '<td><input type="checkbox" class="select-row" data-index="' + actualIndex + '"></td><td>' + t.type.toUpperCase() + '</td><td>' + portfolioColor + portfolioName + '</td><td>' + makeTickerClickable(t.symbol) + '</td><td>' + t.shares.toFixed(2) + '</td><td>$' + t.price.toFixed(2) + '</td><td>' + formatDateDDMMYYYY(t.date) + '</td>';
+  tbody.appendChild(row);
+});
 }
     else if (portfolio === 'sold') {
       for (const key in soldData) {
@@ -1898,8 +2298,7 @@ const portfolioColor = getPortfolioColorDot(data.portfolio);
         }
 
         var portfolioPercent = (portfolioTotalValue > 0) ? (data.currentValue / portfolioTotalValue * 100).toFixed(2) : '0.00';
-row.innerHTML = '<td><input type="checkbox" class="select-row"></td><td>' + makeTickerClickable(symbol) + '</td><td>' + (data.netShares || 0).toFixed(2) + '</td><td>$' + (data.avgCost || 0).toFixed(2) + '</td><td>$' + (data.currentPrice || 0).toFixed(2) + '</td><td>$' + (data.totalCost || 0).toFixed(2) + '</td><td>$' + (data.currentValue || 0).toFixed(2) + '</td><td>' + portfolioPercent + '%</td><td class="' + (data.gainLoss < 0 ? 'negative' : '') + '">$' + (data.gainLoss || 0).toFixed(2) + '</td><td class="' + ((data.gainLossPercent || 0) < 0 ? 'negative' : '') + '">' + (data.gainLossPercent || 0) + '%</td><td>' + (data.weightedDays < 90 ? 'N/A' : ((data.xirr || 0) * 100).toFixed(2) + '%') + '</td><td>' + Math.round(data.weightedDays || 0) + ' days</td><td>' + formatDateDDMMYYYY(data.firstDate) + '</td><td>' + formatDateDDMMYYYY(data.lastDate) + '</td>';
-        tbody.appendChild(row);
+row.innerHTML = '<td><input type="checkbox" class="select-row"></td><td>' + makeTickerClickable(symbol) + '</td><td>' + (data.netShares || 0).toFixed(2) + '</td><td>$' + (data.avgCost || 0).toFixed(2) + '</td><td>' + generatePriceCell(symbol, data.currentPrice) + '</td><td>$' + (data.totalCost || 0).toFixed(2) + '</td><td>$' + (data.currentValue || 0).toFixed(2) + '</td><td class="' + (data.gainLoss < 0 ? 'negative' : '') + '">$' + (data.gainLoss || 0).toFixed(2) + '</td><td class="' + ((data.gainLossPercent || 0) < 0 ? 'negative' : '') + '">' + (data.gainLossPercent || 0) + '%</td><td>' + (data.weightedDays < 90 ? 'N/A' : ((data.xirr || 0) * 100).toFixed(2) + '%') + '</td><td>' + Math.round(data.weightedDays || 0) + ' days</td><td>' + portfolioPercent + '%</td>';        tbody.appendChild(row);
       }
     }
   }
@@ -2228,7 +2627,8 @@ async function addCashFlow() {
   document.getElementById('cashAmount').value = '';
   document.getElementById('cashDate').value = '';
   
-  updateCashFlowTable();
+updateCashFlowTable();
+updateDividendsTable();
 }
 
 function calculateCashFlowXIRR(cashFlows, currentPortfolioValue) {
@@ -2415,8 +2815,24 @@ document.getElementById('csvHelpBtn').addEventListener('click', function() {
   document.getElementById('csvHelpModal').classList.add('active');
 });
 // ============ EVENT LISTENERS & INITIALIZATION ============
+  // Generate price cell with checkbox for manual editing
+function generatePriceCell(symbol, currentPrice) {
+  const price = getCurrentPrice(symbol) || currentPrice || 0;
+  
+  if (priceMode === 'manual') {
+    return `
+      <div class="price-cell">
+        <span>$${price.toFixed(2)}</span>
+        <input type="checkbox" class="price-edit-checkbox" data-symbol="${symbol}" onchange="handlePriceCheckbox(this, '${symbol}', ${price})">
+      </div>
+    `;
+  } else {
+    return `$${price.toFixed(2)}`;
+  }
+}
 
 async function init() {
+    initializePriceMode();  // <-- ADD THIS LINE
   checkFirstVisit();
   initializePortfolios();
   initializeTabs();
@@ -2519,15 +2935,73 @@ if (clearTickerBtn) {
   }
   
   // Premium type toggle
-  document.getElementById('type').addEventListener('click', function() {
-    const premiumTypeSelect = document.getElementById('premiumType');
-    if (this.value === 'premium') {
-      premiumTypeSelect.style.display = 'inline-block';
-    } else {
-      premiumTypeSelect.style.display = 'none';
-    }
-  });
+  // Type-specific field toggles
+document.getElementById('type').addEventListener('change', function() {
+  const premiumTypeSelect = document.getElementById('premiumType');
+  const dividendTypeSelect = document.getElementById('dividendType');
+  const sharesInput = document.getElementById('shares');
+  const priceInput = document.getElementById('price');
   
+  // Hide all sub-selectors by default
+  premiumTypeSelect.style.display = 'none';
+  dividendTypeSelect.style.display = 'none';
+
+  // Reset fields and styling
+  sharesInput.placeholder = 'Shares/Amount';
+  priceInput.placeholder = 'Price';
+  sharesInput.disabled = false;
+  priceInput.disabled = false;
+  sharesInput.style.background = 'white';  // ADD THIS
+  sharesInput.style.color = 'black';       // ADD THIS
+  priceInput.style.background = 'white';   // ADD THIS
+  priceInput.style.color = 'black';        // ADD THIS
+  sharesInput.value = '';                  // ADD THIS
+  priceInput.value = '';                   // ADD THIS
+  
+  // Show appropriate sub-selector
+  if (this.value === 'premium') {
+    premiumTypeSelect.style.display = 'inline-block';
+  } else if (this.value === 'dividend') {
+    dividendTypeSelect.style.display = 'inline-block';
+    handleDividendTypeChange(); // Set initial state
+  }
+});
+  
+// Handle dividend type changes
+function handleDividendTypeChange() {
+  const dividendType = document.getElementById('dividendType').value;
+  const sharesInput = document.getElementById('shares');
+  const priceInput = document.getElementById('price');
+  
+  if (dividendType === 'drip') {
+    // DRIP: Enter shares, price locked at $0
+    sharesInput.value = '';
+    sharesInput.placeholder = '📊 Shares Received (e.g., 0.5)';
+    sharesInput.disabled = false;
+    sharesInput.style.background = 'white';  // CHANGE: white for enabled
+    sharesInput.style.color = 'black';        // CHANGE: black for enabled
+    priceInput.value = '0.00';
+    priceInput.disabled = true;
+    priceInput.placeholder = '💵 $0.00 (DRIP shares)';
+    priceInput.style.background = '#f0f0f0';
+    priceInput.style.color = '#999';
+  } else if (dividendType === 'cash') {
+    // Cash: Shares locked at 0, enter amount
+    sharesInput.value = '0';
+    sharesInput.disabled = true;
+    sharesInput.placeholder = '📊 0 shares (Cash dividend)';
+    sharesInput.style.background = '#f0f0f0';
+    sharesInput.style.color = '#999';
+    priceInput.value = '';
+    priceInput.disabled = false;
+    priceInput.placeholder = '💰 Dividend Amount (e.g., 50.00)';
+    priceInput.style.background = 'white';
+    priceInput.style.color = 'black';
+  }
+}
+
+// Listen for dividend type changes
+document.getElementById('dividendType').addEventListener('change', handleDividendTypeChange);
   const symbols = [];
   const seen = {};
   transactions.forEach(function(t) {
@@ -2576,5 +3050,146 @@ if (clearFiltersBtn) {
 
 // Populate portfolio filter dropdown
 populatePortfolioFilter();
+
+// ==================== MANUAL PRICE ENTRY ====================
+
+let priceMode = localStorage.getItem('priceMode') || 'api';
+let manualPrices = JSON.parse(localStorage.getItem('manualPrices') || '{}');
+
+// Initialize price mode on page load
+function initializePriceMode() {
+  const apiModeRadio = document.getElementById('priceMode_api');
+  const manualModeRadio = document.getElementById('priceMode_manual');
+  const apiKeySection = document.getElementById('apiKeySection');
+  
+  if (!apiModeRadio || !manualModeRadio) {
+    console.warn('Price mode radio buttons not found');
+    return;
+  }
+  
+  // Set initial state from localStorage
+  if (priceMode === 'manual') {
+    manualModeRadio.checked = true;
+    apiKeySection.classList.add('hidden');
+  } else {
+    apiModeRadio.checked = true;
+    apiKeySection.classList.remove('hidden');
+  }
+  
+  // Event listeners for radio buttons
+  apiModeRadio.addEventListener('change', function() {
+    if (this.checked) {
+      priceMode = 'api';
+      localStorage.setItem('priceMode', 'api');
+      apiKeySection.classList.remove('hidden');
+      removeSaveButton();
+      location.reload(); // Reload to update display
+    }
+  });
+  
+  manualModeRadio.addEventListener('change', function() {
+    if (this.checked) {
+      priceMode = 'manual';
+      localStorage.setItem('priceMode', 'manual');
+      apiKeySection.classList.add('hidden');
+      location.reload(); // Reload to update display
+    }
+  });
+}
+
+// Add save button when manual prices are being edited
+function showSaveButton() {
+  let saveBtn = document.getElementById('saveManualPricesBtn');
+  if (!saveBtn) {
+    saveBtn = document.createElement('button');
+    saveBtn.id = 'saveManualPricesBtn';
+    saveBtn.innerHTML = '💾 Save Manual Prices';
+    saveBtn.className = 'btn-primary';
+    saveBtn.style.background = '#28a745';
+    saveBtn.onclick = saveManualPrices;
+    
+    const controlsDiv = document.querySelector('.controls');
+    if (controlsDiv) {
+      controlsDiv.appendChild(saveBtn);
+    }
+  }
+  saveBtn.classList.add('show');
+}
+
+// Remove save button
+function removeSaveButton() {
+  const saveBtn = document.getElementById('saveManualPricesBtn');
+  if (saveBtn) saveBtn.remove();
+}
+
+// Save manually entered prices
+function saveManualPrices() {
+  const inputs = document.querySelectorAll('.price-input');
+  let savedCount = 0;
+  
+  inputs.forEach(input => {
+    const symbol = input.dataset.symbol;
+    const price = parseFloat(input.value);
+    
+    if (symbol && !isNaN(price) && price > 0) {
+      manualPrices[symbol] = price;
+      savedCount++;
+    }
+  });
+  
+  localStorage.setItem('manualPrices', JSON.stringify(manualPrices));
+  alert(`✅ Saved ${savedCount} price${savedCount !== 1 ? 's' : ''}`);
+  location.reload(); // Reload to update display
+}
+
+// Get current price based on mode
+function getCurrentPrice(symbol) {
+  if (priceMode === 'manual') {
+    return manualPrices[symbol] || 0;
+  } else {
+    return livePrices[symbol] || 0;
+  }
+}
+
+// Handle checkbox toggle for price editing
+function handlePriceCheckbox(checkbox, symbol, currentPrice) {
+  const priceCell = checkbox.closest('td');
+  
+  if (checkbox.checked) {
+    // Replace price display with input
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.className = 'price-input';
+    input.dataset.symbol = symbol;
+    input.value = currentPrice || '';
+    input.step = '0.01';
+    input.min = '0';
+    input.placeholder = '0.00';
+    
+    priceCell.innerHTML = '';
+    priceCell.appendChild(input);
+    priceCell.appendChild(checkbox);
+    
+    input.focus();
+    showSaveButton();
+  } else {
+    // Restore price display
+    const input = priceCell.querySelector('.price-input');
+    const newPrice = input ? parseFloat(input.value) : currentPrice;
+    
+    priceCell.innerHTML = `
+      <div class="price-cell">
+        <span>$${(newPrice || 0).toFixed(2)}</span>
+        <input type="checkbox" class="price-edit-checkbox" data-symbol="${symbol}">
+      </div>
+    `;
+    
+    // Re-attach event listener
+    const newCheckbox = priceCell.querySelector('.price-edit-checkbox');
+    newCheckbox.addEventListener('change', function() {
+      handlePriceCheckbox(this, symbol, newPrice);
+    });
+  }
+}
 
 init();
