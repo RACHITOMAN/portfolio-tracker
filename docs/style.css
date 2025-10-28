@@ -47,8 +47,7 @@ p {
 
 .welcome-header h1::before {
   content: '';
-  margin-right: 0;
-}
+  margin-right: 0;}
 
 .welcome-header .tagline {
   color: #6c757d;

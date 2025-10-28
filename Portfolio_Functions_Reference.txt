@@ -1,0 +1,132 @@
+Portfolio Tracker Pro - Complete Function Reference
+============================================================
+
+TOTAL: 61 Functions across 8 Modules
+
+GLOBALS.JS (0 functions)
+------------------------
+- Contains only global variables and constants
+- No functions defined
+
+CALCULATIONS.JS (7 functions)
+------------------------------
+1. formatDateDDMMYYYY() - Convert dates to DD/MM/YYYY format
+2. calculateDaysHeld() - Calculate days between two dates  
+3. isValidTransaction() - Validate transaction data structure
+4. isValidForXIRR() - Validate data for XIRR calculation
+5. calculateXIRR() - Newton-Raphson XIRR calculation
+6. calculateXIRRForSymbol() - Symbol-specific XIRR calculation
+7. calculatePortfolioXIRR() - Portfolio-wide XIRR calculation
+
+DATA-MANAGER.JS (15+ functions)
+-------------------------------
+1. populatePortfolioFilter() - Populate portfolio dropdown filters
+2. checkFirstVisit() - Show welcome modal for new users
+3. checkApiKey() - Validate API key presence
+4. saveApiKey() - Store API key to localStorage
+5. loadApiKey() - Retrieve API key from localStorage
+6. initializePortfolios() - Initialize portfolio system
+7. updatePortfolioDropdown() - Update portfolio selection dropdown
+8. updatePortfolioTabs() - Update portfolio tab navigation
+9. updatePortfolioList() - Update portfolio management list
+10. addPortfolio() - Create new portfolio
+11. updatePortfolioName() - Rename existing portfolio
+12. savePortfolios() - Persist portfolios to storage
+13. getPortfolioName() - Get portfolio name by ID
+14. getPortfolioColorDot() - Get portfolio color indicator
+15. loadDataFromSupabase() - Load data from Supabase database
+16. saveDataToSupabase() - Save data to Supabase database
+17. fixBadDates() - Fix invalid date entries
+18. addTransaction() - Create new transaction
+19. confirmClearData() - Clear all data with confirmation
+20. confirmDeleteSelected() - Delete selected items with confirmation
+21. deletePortfolio() - Remove portfolio and update transactions
+
+API-SERVICE.JS (13+ functions)
+------------------------------
+1. checkDuplicateTransaction() - Detect duplicate transactions
+2. handleCsvImport() - Handle CSV file import
+3. exportTransactionsToCSV() - Export data to CSV format
+4. downloadCsvTemplate() - Generate CSV template file
+5. searchTicker() - Search for ticker symbols
+6. clearTickerSearch() - Clear ticker search results
+7. refreshPricesAndNames() - Refresh UI with current data
+8. initializePriceMode() - Initialize manual/API price mode
+9. showSaveButton() - Show manual price save button
+10. removeSaveButton() - Remove manual price save button
+11. saveManualPrices() - Save manually entered prices
+12. getCurrentPrice() - Get current price (manual or API)
+13. handlePriceCheckbox() - Handle price editing checkbox
+14. processCsvData() - Process CSV data for import
+15. savePricesCache() - Cache prices to database
+16. fetchLivePrices() - Fetch prices from Twelve Data API
+17. getLivePrice() - Get single stock price
+18. refreshAllPrices() - Refresh all stock prices
+
+UI-COMPONENTS.JS (18+ functions)
+--------------------------------
+1. debounce() - Debounce user input events
+2. makeTickerClickable() - Make ticker symbols clickable
+3. filterByTicker() - Filter view by ticker symbol
+4. showTickerModal() - Display ticker detail modal
+5. closeTickerModal() - Close ticker modal
+6. editTransactionFromModal() - Trigger edit from ticker modal
+7. convertToDateInputFormat() - Convert date for input fields
+8. showEditModal() - Display transaction edit modal
+9. closeEditModal() - Close edit modal
+10. formatDateInput() - Smart date input formatting
+11. applyTransactionFilters() - Apply table filters
+12. clearTransactionFilters() - Clear all filters
+13. initializeTabs() - Initialize tab navigation system
+14. initializeSortListeners() - Setup table sorting
+15. sortTable() - Sort table by column
+16. convertDDMMYYYYtoYYYYMMDD() - Convert date formats
+17. updateCsvHelpModal() - Update CSV help content
+18. generatePriceCell() - Generate price table cell
+19. saveEditedTransaction() - Save transaction edits
+
+DIVIDENDS.JS (4 functions)
+--------------------------
+1. updateDividendsTable() - Update dividends display table
+2. updateDividendsSidebar() - Update dividend sidebar content
+3. handleDividendTypeChange() - Handle DRIP vs Cash dividend toggle
+4. initializePriceMode() - Initialize price mode (duplicate)
+
+CASH-FLOW.JS (2+ functions)
+---------------------------
+1. calculateCashFlowXIRR() - Calculate XIRR for cash flows
+2. updateCashFlowTable() - Update cash flow display table
+3. handleCashFlowCsvImport() - Import cash flow CSV files
+4. addCashFlow() - Add new cash flow entry
+5. deleteCashFlowSelected() - Delete selected cash flows
+
+MAIN.JS (2+ functions)
+----------------------
+1. updateTables() - Master function to update all tables
+2. updateSummary() - Update summary statistics
+3. init() - Main initialization function + all event listeners
+
+QUICK REFERENCE
+===============
+- Math/Dates: calculations.js
+- Data/Storage: data-manager.js  
+- API/CSV: api-service.js
+- UI/Modals: ui-components.js
+- Dividends: dividends.js
+- Cash Flow: cash-flow.js
+- Startup: main.js
+- Variables: globals.js
+
+LOAD ORDER
+==========
+1. globals.js
+2. calculations.js
+3. data-manager.js
+4. api-service.js
+5. ui-components.js
+6. dividends.js
+7. cash-flow.js
+8. main.js
+
+Original file: 3,194 lines → 8 focused modules
+Generated: October 28, 2025
