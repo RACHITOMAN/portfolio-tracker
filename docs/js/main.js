@@ -147,24 +147,38 @@ function updateSummary(symbolData, portfolioData, currentPortfolio, soldData) {
     }
     
     if (portfolioNames.length > 1) {
-      document.getElementById('totalGainLoss').textContent = '$' + portfolioRealizedGains[portfolios[2].id].toFixed(2);
-      document.getElementById('totalGainLossPercent').textContent = portfolioNames[1];
-    }
-    
-    document.getElementById('portfolioXIRR').closest('.summary-card').style.display = 'none';
-    document.getElementById('weightedDaysHeld').closest('.summary-card').style.display = 'none';
-    
-    return;
-  }
-  
-  document.getElementById('portfolioXIRR').closest('.summary-card').style.display = 'block';
-  document.getElementById('weightedDaysHeld').closest('.summary-card').style.display = 'block';
-  
-  let filteredSymbolData = symbolData;
-  let displayValue = portfolioData.totalValue;
-  let displayCost = portfolioData.totalCost;
-  let holdings = {};
-  
+  document.getElementById('totalGainLoss').textContent = '$' + portfolioRealizedGains[portfolios[2].id].toFixed(2);
+  document.getElementById('totalGainLossPercent').textContent = portfolioNames[1];
+}
+
+const xirrCard = document.getElementById('portfolioXIRR');
+if (xirrCard) {
+  xirrCard.closest('.summary-card').style.display = 'none';
+}
+
+const daysCard = document.getElementById('weightedDaysHeld');
+if (daysCard) {
+  daysCard.closest('.summary-card').style.display = 'none';
+}
+
+return;
+}
+
+const xirrElement = document.getElementById('portfolioXIRR');
+if (xirrElement) {
+  xirrElement.closest('.summary-card').style.display = 'block';
+}
+
+const daysElement = document.getElementById('weightedDaysHeld');
+if (daysElement) {
+  daysElement.closest('.summary-card').style.display = 'block';
+}
+
+let filteredSymbolData = symbolData;
+let displayValue = portfolioData.totalValue;
+let displayCost = portfolioData.totalCost;
+let holdings = {};
+
   portfolios.filter(p => p.id !== 'total').forEach(p => {
     holdings[p.id] = portfolioData[p.id] || 0;
   });
@@ -247,6 +261,7 @@ async function init() {
   checkFirstVisit();
   initializePortfolios();
   initializeTabs();
+  initializePremiumFilters();  
   initializeSortListeners();
   
   console.log('Before loadDataFromSupabase');
@@ -308,6 +323,14 @@ document.getElementById('importCsvBtn').addEventListener('click', function() {
   document.getElementById('csvFileInput').click();
 });
 document.getElementById('csvFileInput').addEventListener('change', handleCsvImport);
+// All Transactions filters
+document.getElementById('filterType').addEventListener('change', applyTransactionFilters);
+document.getElementById('filterPortfolio').addEventListener('change', applyTransactionFilters);
+document.getElementById('filterSymbol').addEventListener('input', debounce(applyTransactionFilters, 300));
+document.getElementById('clearFiltersBtn').addEventListener('click', clearTransactionFilters);
+
+// Populate portfolio filter dropdown
+populatePortfolioFilter();
 
 // CSV Export
 const exportBtn = document.getElementById('exportCsvBtn');

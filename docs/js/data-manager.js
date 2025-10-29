@@ -126,10 +126,6 @@ function updatePortfolioTabs() {
     // Add sort state for this portfolio
     sortState[portfolio.id] = { column: 'symbol', direction: 'asc' };
   });
-  
-  // Reattach tab listeners
-  initializeTabs();
-  initializeSortListeners();
 }
 
 function updatePortfolioList() {

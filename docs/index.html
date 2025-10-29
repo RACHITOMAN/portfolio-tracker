@@ -103,75 +103,100 @@
 
   <div class="layout-wrapper">
     <div class="sidebar">
-      <div class="portfolio-summary">
-        <div class="summary-card">
-          <h3>Total Value</h3>
-          <div class="value" id="totalValue">$0.00</div>
+  <!-- Portfolio Sidebar (for Total, RM, SA tabs) -->
+  <div class="portfolio-summary" id="portfolioSidebar">
+    <div class="summary-card">
+      <h3>Total Value</h3>
+      <div class="value" id="totalValue">$0.00</div>
+    </div>
+    <div class="summary-card">
+      <h3>Total Cost</h3>
+      <div class="value" id="totalCost">$0.00</div>
+    </div>
+    <div class="summary-card">
+      <h3>Realized Gain/Loss</h3>
+      <div class="value" id="realizedGainLoss">$0.00</div>
+      <div class="change" id="realizedGainPercent">0.00%</div>
+    </div>
+    <div class="summary-card">
+      <h3>Unrealized Gain/Loss</h3>
+      <div class="value" id="totalGainLoss">$0.00</div>
+      <div class="change" id="totalGainLossPercent">0.00%</div>
+    </div>
+    <div class="summary-card">
+      <h3>Holdings</h3>
+      <div class="value" id="stockCount">0 Total</div>
+      <div class="change" id="holdingsBreakdown"></div>
+    </div>
+    <div class="summary-card">
+      <h3>XIRR</h3>
+      <div class="value" id="portfolioXIRR">0.00%</div>
+    </div>
+    <div class="summary-card">
+      <h3>Weighted Avg Days Held</h3>
+      <div class="value" id="weightedDaysHeld">0 days</div>
+    </div>
+  </div>
+  
+  <!-- Dividends Sidebar -->
+  <div class="portfolio-summary" id="dividendsSidebar" style="display: none;">
+    <!-- Populated by dividends.js -->
+  </div>
+  
+  <!-- Premiums Sidebar -->
+  <div class="portfolio-summary" id="premiumsSidebar" style="display: none;">
+    <!-- Populated by premiums.js -->
+  </div>
+  
+  <!-- Cash Flow Sidebar -->
+  <div class="portfolio-summary" id="cashFlowSidebar" style="display: none;">
+    <div class="summary-card" id="cashFlowCard1">
+      <h3>Total Cash Input</h3>
+      <div class="value" id="totalCashInput">$0.00</div>
+    </div>
+    <div class="summary-card" id="cashFlowCard2">
+      <h3>Portfolio Value</h3>
+      <div class="value" id="cashFlowPortfolioValue">$0.00</div>
+    </div>
+    <div class="summary-card" id="cashFlowCard3">
+      <h3>Cash-Based Gain/Loss</h3>
+      <div class="value" id="cashFlowGainLoss">$0.00</div>
+      <div class="change" id="cashFlowGainPercent">0.00%</div>
+    </div>
+    <div class="summary-card" id="cashFlowCard4">
+      <h3>Cash-Based XIRR</h3>
+      <div class="value" id="cashFlowXIRR">0.00%</div>
+    </div>
+    <div class="summary-card" id="cashFlowCard5">
+      <h3>Weighted Avg Days</h3>
+      <div class="value" id="cashFlowWeightedDays">0 days</div>
+    </div>
+  </div>
+  
+  <!-- Sold Sidebar -->
+  <div class="portfolio-summary" id="soldSidebar" style="display: none;">
+    <!-- Populated later if needed -->
+  </div>
+</div>
+
+  <div class="main-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <div>
+          <h1 style="margin: 0;">Portfolio Tracker</h1>
+          <p style="margin: 5px 0 0 0;">Monitor your investments with real-time performance tracking</p>
         </div>
-        <div class="summary-card">
-          <h3>Total Cost</h3>
-          <div class="value" id="totalCost">$0.00</div>
-        </div>
-        <div class="summary-card">
-          <h3>Realized Gain/Loss</h3>
-          <div class="value" id="realizedGainLoss">$0.00</div>
-          <div class="change" id="realizedGainPercent">0.00%</div>
-        </div>
-        <div class="summary-card">
-          <h3>Unrealized Gain/Loss</h3>
-          <div class="value" id="totalGainLoss">$0.00</div>
-          <div class="change" id="totalGainLossPercent">0.00%</div>
-        </div>
-        <div class="summary-card">
-          <h3>Holdings</h3>
-          <div class="value" id="stockCount">0 Total</div>
-          <div class="change" id="holdingsBreakdown"></div>
-        </div>
-        <div class="summary-card">
-          <h3>XIRR</h3>
-          <div class="value" id="portfolioXIRR">0.00%</div>
-        </div>
-        <div class="summary-card">
-          <h3>Weighted Avg Days Held</h3>
-          <div class="value" id="weightedDaysHeld">0 days</div>
-        </div>
-        
-        <div class="summary-card" id="cashFlowCard1" style="display: none;">
-          <h3>Total Cash Input</h3>
-          <div class="value" id="totalCashInput">$0.00</div>
-        </div>
-        <div class="summary-card" id="cashFlowCard2" style="display: none;">
-          <h3>Portfolio Value</h3>
-          <div class="value" id="cashFlowPortfolioValue">$0.00</div>
-        </div>
-        <div class="summary-card" id="cashFlowCard3" style="display: none;">
-          <h3>Cash-Based Gain/Loss</h3>
-          <div class="value" id="cashFlowGainLoss">$0.00</div>
-          <div class="change" id="cashFlowGainPercent">0.00%</div>
-        </div>
-        <div class="summary-card" id="cashFlowCard4" style="display: none;">
-          <h3>Cash-Based XIRR</h3>
-          <div class="value" id="cashFlowXIRR">0.00%</div>
-        </div>
-        <div class="summary-card" id="cashFlowCard5" style="display: none;">
-          <h3>Weighted Avg Days</h3>
-          <div class="value" id="cashFlowWeightedDays">0 days</div>
+        <div style="display: flex; gap: 10px;">
+          <button id="settingsBtn" class="btn-settings">⚙️ Settings</button>
+          <button id="helpBtn" class="btn-help">❓ Help</button>
         </div>
       </div>
-      
-      <button id="settingsBtn" class="btn-settings">⚙️ Settings</button>
-      <button id="helpBtn" class="btn-help">❓ Help</button>
-    </div>
-    
-    <div class="main-content">
-      <h1>Portfolio Tracker</h1>
-      <p>Monitor your investments with real-time performance tracking</p>
       
       <div class="tabs" id="mainTabs">
         <button class="tab active" data-tab="total">🌎 Total Portfolio</button>
         <!-- Dynamic portfolio tabs will be inserted here -->
         <button class="tab" data-tab="sold">💰 Sold Positions</button>
 <button class="tab" data-tab="dividends">💎 Dividends</button>
+<button class="tab" data-tab="premiums">💰 Premiums</button>
         <button class="tab" data-tab="cashflow">💵 Cash Flow</button>
         <button class="tab" data-tab="ticker">🔍 Ticker Search</button>
         <button class="tab" data-tab="all">📋 All Transactions</button>
@@ -185,6 +210,7 @@
 
       <div class="controls">
         <select id="type">
+            <option value="">Select Type</option>
           <option value="buy">Buy</option>
           <option value="sell">Sell</option>
           <option value="dividend">Dividend</option>
@@ -203,7 +229,7 @@
 </select>
 
 <select id="portfolio">
-  <option value="">Select Portfolio</option>
+  <option value="" selected>Select Portfolio</option>
 </select>
         <input type="text" id="symbol" placeholder="Symbol">
         <input type="number" id="shares" placeholder="Shares/Amount" min="0" step="0.01">
@@ -257,8 +283,8 @@
     </div>
     
     <h3>Required CSV Format</h3>
-    <code style="display: block; background: #f8f9fa; padding: 10px; border-radius: 4px; margin: 10px 0; font-family: monospace;">
-Type,Portfolio,Symbol,Shares,Price,Date
+<code>
+  Type,Portfolio,Symbol,Shares,Price,Date
     </code>
     
     <table style="width: 100%; margin: 15px 0; border-collapse: collapse;">
@@ -335,22 +361,25 @@ Type,Portfolio,Symbol,Shares,Price,Date
   <div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border-radius: 8px; border-left: 4px solid #667eea;">
     <h3 style="margin: 0 0 10px 0; color: #2c3e50;">💸 Dividend Income Summary</h3>
     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
-      <div style="background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-        <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Total DRIP Income</div>
-        <div id="totalDripIncome" style="font-size: 1.5em; font-weight: 600; color: #28a745;">$0.00</div>
-      </div>
-      <div style="background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-        <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Total Cash Dividends</div>
-        <div id="totalCashDividends" style="font-size: 1.5em; font-weight: 600; color: #667eea;">$0.00</div>
-      </div>
-      <div style="background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-        <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Total Dividend Income</div>
-        <div id="totalDividendIncome" style="font-size: 1.5em; font-weight: 600; color: #764ba2;">$0.00</div>
-      </div>
-      <div style="background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-        <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Dividend Stocks</div>
-        <div id="dividendStocksCount" style="font-size: 1.5em; font-weight: 600; color: #2c3e50;">0</div>
-      </div>
+      <div style="background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center;">
+  <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Total DRIP Income</div>
+ <div id="totalDripIncome" style="font-size: 1.5em; font-weight: 600; color: #28a745;">$0.00</div>
+</div>
+
+      <div style="background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center;">
+  <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Total DRIP Income</div>
+<div id="totalCashDividends" style="font-size: 1.5em; font-weight: 600; color: #667eea;">$0.00</div>
+</div>
+
+      <div style="background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center;">
+  <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Total DRIP Income</div>
+<div id="totalDividendIncome" style="font-size: 1.5em; font-weight: 600; color: #764ba2;">$0.00</div>
+</div>
+
+     <div style="background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center;">
+  <div style="color: #6c757d; font-size: 0.85em; margin-bottom: 5px;">Total DRIP Income</div>
+<div id="dividendStocksCount" style="font-size: 1.5em; font-weight: 600; color: #2c3e50;">0</div>
+</div>
     </div>
   </div>
   
@@ -372,7 +401,39 @@ Type,Portfolio,Symbol,Shares,Price,Date
   </div>
 </div>
 
-      <div class="tab-content" id="all">
+<div class="tab-content" id="premiums">
+  <!-- Filter Buttons FIRST -->
+  <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px;">
+    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+      <span style="font-weight: 600; color: #2c3e50; margin-right: 10px;">Filter:</span>
+<button class="premium-filter-btn" data-period="1week" style="padding: 12px 24px; font-size: 1em; border-radius: 8px; border: none;">Last Week</button>
+<button class="premium-filter-btn" data-period="1month" style="padding: 12px 24px; font-size: 1em; border-radius: 8px; border: none;">Last Month</button>
+<button class="premium-filter-btn" data-period="quarter" style="padding: 12px 24px; font-size: 1em; border-radius: 8px; border: none;">Last Quarter</button>
+<button class="premium-filter-btn" data-period="ytd" style="padding: 12px 24px; font-size: 1em; border-radius: 8px; border: none;">YTD</button>
+<button class="premium-filter-btn active" data-period="lifetime" style="padding: 12px 24px; font-size: 1em; border-radius: 8px; border: none;">Lifetime</button>
+    </div>
+  </div>
+
+  <!-- Premiums Table SECOND -->
+  <div class="table-responsive">
+    <table id="premiumsTable">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Portfolio</th>
+          <th># Trades</th>
+          <th>Total Premium</th>
+          <th>Covered Calls</th>
+          <th>CSP Expired</th>
+          <th>CSP Assigned</th>
+          <th>Latest Date</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+<div class="tab-content" id="all">
         <h2>All Transactions</h2>
         
         <!-- Filter Controls -->
@@ -429,7 +490,6 @@ Type,Portfolio,Symbol,Shares,Price,Date
                 <th data-sort="shares">Shares</th>
                 <th data-sort="price">Price</th>
                 <th data-sort="date">Date</th>
-                <th data-sort="value">Value</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -485,6 +545,7 @@ Type,Portfolio,Symbol,Shares,Price,Date
 <script src="js/api-service.js"></script>
 <script src="js/ui-components.js"></script>
 <script src="js/dividends.js"></script>
+<script src="js/premiums.js"></script>
 <script src="js/cash-flow.js"></script>
 <script src="js/main.js"></script>
 </body>

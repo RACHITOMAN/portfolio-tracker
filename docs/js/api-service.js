@@ -188,20 +188,16 @@ function searchTicker() {
     return pObj ? pObj.name : t.portfolio;
   }))].join(', ');
   
-  summaryRow.innerHTML = '<td><input type="checkbox" class="select-row" data-type="summary"></td><td>SUMMARY</td><td>' + portfolioNames + '</td><td>' + tickerInput + '</td><td>' + totalShares.toFixed(2) + '</td><td>' + priceDisplay + '</td><td>' + formatDateDDMMYYYY(Date.now()) + '</td><td>$' + totalDividends.toFixed(2) + '</td>';
-  tbody.appendChild(summaryRow);
+summaryRow.innerHTML = '<td><input type="checkbox" class="select-row" data-type="summary"></td><td>SUMMARY</td><td>' + portfolioNames + '</td><td>' + tickerInput + '</td><td>' + totalShares.toFixed(2) + '</td><td>' + priceDisplay + '</td><td>' + formatDateDDMMYYYY(Date.now()) + '</td>';  tbody.appendChild(summaryRow);
 
   tickerTxns.forEach(function(t, index) {
-    const value = t.type === 'dividend' ? t.shares * t.price : t.type === 'buy' ? -t.shares * t.price : t.shares * t.price;
-    const txRow = document.createElement('tr');
     
     // Map portfolio ID to name
     const portfolioObj = portfolios.find(p => p.id === t.portfolio);
     const portfolioName = portfolioObj ? portfolioObj.name : t.portfolio.toUpperCase();
     
     // Store all data in data attributes for easy deletion
-    txRow.innerHTML = '<td><input type="checkbox" class="select-row" data-type="' + t.type + '" data-portfolio="' + t.portfolio + '" data-symbol="' + t.symbol + '" data-shares="' + t.shares + '" data-price="' + t.price + '" data-date="' + t.date + '"></td><td>' + t.type.toUpperCase() + '</td><td>' + portfolioName + '</td><td>' + t.symbol + '</td><td>' + t.shares.toFixed(2) + '</td><td>$' + t.price.toFixed(2) + '</td><td>' + formatDateDDMMYYYY(t.date) + '</td><td>' + (t.type === 'dividend' ? '$' + value.toFixed(2) : '') + '</td>';
-    tbody.appendChild(txRow);
+txRow.innerHTML = '<td><input type="checkbox" class="select-row" data-type="' + t.type + '" data-portfolio="' + t.portfolio + '" data-symbol="' + t.symbol + '" data-shares="' + t.shares + '" data-price="' + t.price + '" data-date="' + t.date + '"></td><td>' + t.type.toUpperCase() + '</td><td>' + portfolioName + '</td><td>' + t.symbol + '</td><td>' + t.shares.toFixed(2) + '</td><td>$' + t.price.toFixed(2) + '</td><td>' + formatDateDDMMYYYY(t.date) + '</td>';    tbody.appendChild(txRow);
   });
 }
 
@@ -409,8 +405,11 @@ function refreshPricesAndNames() {
   const portfolioFilter = ['total', ...portfolios.filter(p => p.id !== 'total').map(p => p.id)].includes(currentPortfolio) ? currentPortfolio : 'total';
  
   updateSummary(globalSymbolData, portfolioData, portfolioFilter, soldData);
-  updateCashFlowTable();
-  updateDividendsTable(); // ← ADD THIS LINE
+updateCashFlowTable();
+updateDividendsTable();
+updatePremiumsTable();
+updateAllTransactionsTable();  // ADD THIS
+clearTickerSearch();            // ADD THIS (initializes ticker table as empty)
 }
 // Initialize price mode on page load
 function initializePriceMode() {
@@ -800,4 +799,79 @@ async function refreshAllPrices() {
       btn.style.cursor = 'pointer';
     }
   }
+}
+// ============ ALL TRANSACTIONS TABLE ============
+
+function updateAllTransactionsTable() {
+  const tbody = document.getElementById('allTable').querySelector('tbody');
+  if (!tbody) return;
+  
+  tbody.innerHTML = '';
+  
+  // Apply filters
+  let filteredTransactions = transactions.filter(t => {
+    const typeMatch = !transactionFilters.type || t.type === transactionFilters.type;
+    const portfolioMatch = !transactionFilters.portfolio || t.portfolio === transactionFilters.portfolio;
+    const symbolMatch = !transactionFilters.symbol || t.symbol.toLowerCase().includes(transactionFilters.symbol.toLowerCase());
+    
+    return typeMatch && portfolioMatch && symbolMatch;
+  });
+  
+  // Sort by date (newest first)
+  filteredTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+  
+  // Populate table
+  filteredTransactions.forEach(t => {
+    const row = document.createElement('tr');
+    const portfolioObj = portfolios.find(p => p.id === t.portfolio);
+    const portfolioName = portfolioObj ? portfolioObj.name : t.portfolio.toUpperCase();
+    
+    row.innerHTML = `
+      <td><input type="checkbox" class="select-row" data-type="${t.type}" data-portfolio="${t.portfolio}" data-symbol="${t.symbol}" data-shares="${t.shares}" data-price="${t.price}" data-date="${t.date}"></td>
+      <td>${t.type.toUpperCase()}</td>
+      <td>${portfolioName}</td>
+      <td>${t.symbol}</td>
+      <td>${t.shares.toFixed(2)}</td>
+      <td>$${t.price.toFixed(2)}</td>
+      <td>${formatDateDDMMYYYY(t.date)}</td>
+    `;
+    
+    tbody.appendChild(row);
+  });
+  
+  // Update count
+  console.log(`All Transactions: Showing ${filteredTransactions.length} of ${transactions.length} transactions`);
+}
+
+function applyTransactionFilters() {
+  transactionFilters.type = document.getElementById('filterType').value;
+  transactionFilters.portfolio = document.getElementById('filterPortfolio').value;
+  transactionFilters.symbol = document.getElementById('filterSymbol').value;
+  
+  updateAllTransactionsTable();
+}
+
+function clearTransactionFilters() {
+  document.getElementById('filterType').value = '';
+  document.getElementById('filterPortfolio').value = '';
+  document.getElementById('filterSymbol').value = '';
+  
+  transactionFilters = { type: '', portfolio: '', symbol: '' };
+  updateAllTransactionsTable();
+}
+
+function populatePortfolioFilter() {
+  const select = document.getElementById('filterPortfolio');
+  if (!select) return;
+  
+  // Keep "All Portfolios" option
+  select.innerHTML = '<option value="">All Portfolios</option>';
+  
+  // Add each portfolio
+  portfolios.filter(p => p.id !== 'total').forEach(p => {
+    const option = document.createElement('option');
+    option.value = p.id;
+    option.textContent = p.name;
+    select.appendChild(option);
+  });
 }

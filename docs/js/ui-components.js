@@ -356,65 +356,80 @@ function initializeTabs() {
         const tabsWithDelete = ['total', ...portfolios.filter(p => p.id !== 'total').map(p => p.id), 'all', 'ticker', 'sold'];
 
         if (portfolioTabs.includes(tab.dataset.tab)) {
-  mainControls.style.display = 'flex';
-  // Show all controls
-  mainControls.querySelectorAll('select, input, button').forEach(el => el.style.display = '');
-} else if (tabsWithDelete.includes(tab.dataset.tab)) {
-  mainControls.style.display = 'flex';
-  // Hide add transaction controls, show delete
-  mainControls.querySelectorAll('select, input:not([type="checkbox"]), #addTransactionBtn, #clearDataBtn').forEach(el => el.style.display = 'none');
-  const deleteBtn = document.getElementById('deleteSelected');
-  if (deleteBtn) deleteBtn.style.display = 'inline-block';
-} else {
-  mainControls.style.display = 'none';
-}
+          mainControls.style.display = 'flex';
+          mainControls.querySelectorAll('select, input, button').forEach(el => el.style.display = '');
+        } else if (tabsWithDelete.includes(tab.dataset.tab)) {
+          mainControls.style.display = 'flex';
+          mainControls.querySelectorAll('select, input:not([type="checkbox"]), #addTransactionBtn, #clearDataBtn').forEach(el => el.style.display = 'none');
+          const deleteBtn = document.getElementById('deleteSelected');
+          if (deleteBtn) deleteBtn.style.display = 'inline-block';
+        } else {
+          mainControls.style.display = 'none';
+        }
       }
-      if (tab.dataset.tab === 'ticker') {
-  console.log('Ticker tab clicked - showing delete button');
-  const deleteBtn = document.getElementById('deleteSelected');
-  console.log('Delete button:', deleteBtn);
-  if (deleteBtn) {
-    deleteBtn.style.display = 'inline-block';
-    console.log('Delete button display:', deleteBtn.style.display);
-  }
-}
       
-      // Show/hide cash flow summary cards
-      if (tab.dataset.tab === 'cashflow') {
-        ['cashFlowCard1', 'cashFlowCard2', 'cashFlowCard3', 'cashFlowCard4', 'cashFlowCard5'].forEach(id => {
-          const card = document.getElementById(id);
-          if (card) card.style.display = 'block';
-        });
-      } else {
-        ['cashFlowCard1', 'cashFlowCard2', 'cashFlowCard3', 'cashFlowCard4', 'cashFlowCard5'].forEach(id => {
-          const card = document.getElementById(id);
-          if (card) card.style.display = 'none';
-        });
+      if (tab.dataset.tab === 'ticker') {
+        console.log('Ticker tab clicked - showing delete button');
+        const deleteBtn = document.getElementById('deleteSelected');
+        console.log('Delete button:', deleteBtn);
+        if (deleteBtn) {
+          deleteBtn.style.display = 'inline-block';
+          console.log('Delete button display:', deleteBtn.style.display);
+        }
       }
-    // Update dividends table when switching to dividends tab
-if (tab.dataset.tab === 'dividends') {
-  console.log('Dividends tab clicked - updating table');
-  
-  // Save original sidebar HTML if not saved yet
-  const portfolioSummary = document.querySelector('.sidebar .portfolio-summary');
-  if (portfolioSummary && !originalSidebarHTML) {
-    originalSidebarHTML = portfolioSummary.innerHTML;
-  }
-  
-  updateDividendsTable('total');
-  updateDividendsSidebar();
-} else {
-  // Restore original sidebar for non-dividend tabs
-  const portfolioSummary = document.querySelector('.sidebar .portfolio-summary');
-  if (portfolioSummary && originalSidebarHTML) {
-    portfolioSummary.innerHTML = originalSidebarHTML;
-  }
-}
-      refreshPricesAndNames();
-    });
-  });
-}
+      
+      // Sidebar management
+      const portfolioSidebar = document.getElementById('portfolioSidebar');
+      const dividendsSidebar = document.getElementById('dividendsSidebar');
+      const premiumsSidebar = document.getElementById('premiumsSidebar');
+      const cashFlowSidebar = document.getElementById('cashFlowSidebar');
+      const soldSidebar = document.getElementById('soldSidebar');
+      const sidebarContainer = document.querySelector('.sidebar');
 
+
+      // Hide all sidebars first
+      [portfolioSidebar, dividendsSidebar, premiumsSidebar, cashFlowSidebar, soldSidebar].forEach(sb => {
+        if (sb) sb.style.display = 'none';
+      });
+      
+      // Determine which sidebar to show
+      const portfolioTabsList = ['total', ...portfolios.filter(p => p.id !== 'total').map(p => p.id)];
+      
+      if (portfolioTabsList.includes(tab.dataset.tab)) {
+        // Portfolio tabs use portfolio sidebar
+        if (portfolioSidebar) portfolioSidebar.style.display = 'block';
+        
+      } else if (tab.dataset.tab === 'dividends') {
+        if (dividendsSidebar) dividendsSidebar.style.display = 'block';
+        updateDividendsTable('total');
+        updateDividendsSidebar();
+        
+      } else if (tab.dataset.tab === 'premiums') {
+        if (premiumsSidebar) premiumsSidebar.style.display = 'block';
+        updatePremiumsTable('lifetime');
+        
+      } else if (tab.dataset.tab === 'cashflow') {
+        if (cashFlowSidebar) cashFlowSidebar.style.display = 'block';
+        
+      } else if (tab.dataset.tab === 'sold') {
+        if (soldSidebar) soldSidebar.style.display = 'block';
+        
+      } else if (tab.dataset.tab === 'all') {
+        updateAllTransactionsTable();
+        populatePortfolioFilter();
+      }
+      // 'ticker' and 'all' tabs show no sidebar
+      
+      // Hide entire sidebar container for tabs that don't need it
+      if (tab.dataset.tab === 'ticker' || tab.dataset.tab === 'all') {
+        if (sidebarContainer) sidebarContainer.style.display = 'none';
+      } else {
+        if (sidebarContainer) sidebarContainer.style.display = 'block';
+      }
+      refreshPricesAndNames();
+    });  // Close tab.addEventListener
+  });    // Close tabs.forEach
+}          // Close initializeTabs function
 // ============ SORT LISTENERS ============
 
 function initializeSortListeners() {
@@ -618,7 +633,7 @@ async function saveEditedTransaction(transactionIndex) {
   };
   
   await saveDataToSupabase();
-refreshPricesAndNames();
-closeEditModal();
+  refreshPricesAndNames();
+  closeEditModal();
   alert('Transaction updated successfully!');
 }

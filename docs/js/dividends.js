@@ -114,7 +114,7 @@ function updateDividendsTable(portfolioFilter = 'total') {
   });
 }
 function updateDividendsSidebar() {
-  const sidebar = document.querySelector('.sidebar .portfolio-summary');
+const sidebar = document.getElementById('dividendsSidebar');
   if (!sidebar) return;
   
   // Get all dividend transactions
@@ -224,70 +224,4 @@ if (dateInput) {
     formatDateInput(this);
   });
 }
-// Transaction filters
-const filterType = document.getElementById('filterType');
-const filterPortfolio = document.getElementById('filterPortfolio');
-const filterSymbol = document.getElementById('filterSymbol');
-const clearFiltersBtn = document.getElementById('clearFiltersBtn');
 
-if (filterType) {
-  filterType.addEventListener('change', applyTransactionFilters);
-}
-if (filterPortfolio) {
-  filterPortfolio.addEventListener('change', applyTransactionFilters);
-}
-if (filterSymbol) {
-  filterSymbol.addEventListener('input', debounce(applyTransactionFilters, 300));
-}
-if (clearFiltersBtn) {
-  clearFiltersBtn.addEventListener('click', clearTransactionFilters);
-}
-
-// Populate portfolio filter dropdown
-populatePortfolioFilter();
-
-// ==================== MANUAL PRICE ENTRY ====================
-
-let priceMode = localStorage.getItem('priceMode') || 'api';
-let manualPrices = JSON.parse(localStorage.getItem('manualPrices') || '{}');
-
-// Initialize price mode on page load
-function initializePriceMode() {
-  const apiModeRadio = document.getElementById('priceMode_api');
-  const manualModeRadio = document.getElementById('priceMode_manual');
-  const apiKeySection = document.getElementById('apiKeySection');
-  
-  if (!apiModeRadio || !manualModeRadio) {
-    console.warn('Price mode radio buttons not found');
-    return;
-  }
-  
-  // Set initial state from localStorage
-  if (priceMode === 'manual') {
-    manualModeRadio.checked = true;
-    apiKeySection.classList.add('hidden');
-  } else {
-    apiModeRadio.checked = true;
-    apiKeySection.classList.remove('hidden');
-  }
-  
-  // Event listeners for radio buttons
-  apiModeRadio.addEventListener('change', function() {
-    if (this.checked) {
-      priceMode = 'api';
-      localStorage.setItem('priceMode', 'api');
-      apiKeySection.classList.remove('hidden');
-      removeSaveButton();
-      location.reload(); // Reload to update display
-    }
-  });
-  
-  manualModeRadio.addEventListener('change', function() {
-    if (this.checked) {
-      priceMode = 'manual';
-      localStorage.setItem('priceMode', 'manual');
-      apiKeySection.classList.add('hidden');
-      location.reload(); // Reload to update display
-    }
-  });
-}

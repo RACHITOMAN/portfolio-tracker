@@ -1,3 +1,21 @@
+* {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+button, input, select, textarea, table {
+  font-family: inherit;
+  font-size: inherit;
+}
 body {
   font-family: 'Segoe UI', Arial, sans-serif;
   margin: 0;
@@ -376,14 +394,13 @@ p {
 }
 
 .btn-settings, .btn-help {
-  width: 100%;
-  padding: 10px;
-  margin-top: 10px;
+  padding: 10px 16px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   font-weight: 500;
   font-size: 0.95em;
+  transition: all 0.2s;
 }
 
 .btn-settings {
@@ -999,4 +1016,98 @@ table th:first-child {
 table td:nth-child(2),
 table th[data-sort="symbol"] {
   text-align: center;
+}
+.premium-filter-btn {
+  padding: 10px 20px !important;
+  border: 2px solid #e9ecef !important;
+  background: white !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  font-weight: 500 !important;
+  font-size: 0.95em !important;
+  transition: all 0.2s !important;
+  color: #2c3e50 !important;
+}
+
+
+.premium-filter-btn:hover {
+  border-color: #28a745 !important;
+  color: #28a745;
+  transform: translateY(-1px);
+}
+
+.premium-filter-btn.active {
+  background: #28a745 !important;
+  border-color: #28a745 !important;
+  color: white !important;
+}
+
+.tab[data-tab="premiums"] {
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  color: white;
+}
+
+.tab[data-tab="premiums"]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+}
+
+.tab[data-tab="premiums"].active {
+  background: linear-gradient(135deg, #20c997 0%, #28a745 100%);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.5);
+}
+
+#csvHelpModal pre,
+#csvHelpModal code {
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+}
+#csvHelpModal .modal-content {
+  max-width: 700px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+#csvHelpModal table {
+  width: 100%;
+  font-size: 14px;  /* Match body font size exactly */
+  font-weight: 400;  /* Normal weight */
+  table-layout: fixed;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+#csvHelpModal th {
+  width: 25%;
+  padding: 10px;
+  text-align: left;
+  font-weight: 600;  /* Semi-bold for headers only */
+  font-size: 14px;
+}
+
+#csvHelpModal td {
+  width: 75%;
+  padding: 10px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 400;  /* Normal weight for data */
+}
+#csvHelpModal h3 {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 20px 0 10px 0;
+}
+
+#csvHelpModal code {
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace !important;
+  font-size: 13px;
+  display: block;
+  background: #f8f9fa;
+  padding: 10px;
+  border-radius: 4px;
+  margin: 10px 0;
 }

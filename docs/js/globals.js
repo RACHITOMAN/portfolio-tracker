@@ -27,3 +27,4 @@ const PORTFOLIO_COLORS = {
   4: 'portfolio-4',
   5: 'portfolio-5'
 };
+let priceMode = localStorage.getItem('priceMode') || 'api';
